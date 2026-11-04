@@ -50,6 +50,7 @@ Native-sidebar remote rows follow ZCode's `virtual-project-row`: status cloud, p
 | Native workspace | each remote workspace is projected into the native sidebar as a ZCode-style row: cloud status glyph + project name + device name; its agent is bridged to a detached remote headless session |
 | Row menu | hover `...` on a remote row → **Edit** (rename the project and native row) or **Delete project** (remove the local projection and service, keep the remote project directory) |
 | Live streaming | the remote runner projects `agent/assistant-stream` frames over a single `tail -f` SSH channel, so reasoning and answer text appear incrementally instead of at step end |
+| Warm runner | while a remote workspace is idle, the bridge pre-boots the next turn's headless runner and feeds it the prompt over a FIFO. The next message skips the 4-5 s process startup: measured `step/start` 0.20 s and first text 0.7 s after send, versus 4.96 s / 5.40 s cold. The runner is refreshed every 5 min and bounded by a TTL. `DSH_SSH_NO_PREWARM=1` disables it |
 | Lifecycle | automatic start on create/open; no per-workspace start/stop buttons. Remove from the row menu (service + runtime dir only; project dir kept) |
 | Credentials | optionally copies local `$DSH_HOME/.credentials.yaml` (0600) into each remote workspace's own DSH home |
 | Legacy import | imports hosts from ZCode's `~/.dsh/dsh-ssh.json` on first load |
@@ -86,7 +87,7 @@ cmd /c mklink /J "%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-ssh-remot
    - A remote device opens the 1:1 ZCode folder browser (SFTP listing) after connecting.
 3. **Create** deploys/reuses the remote runtime and adds the workspace to the native sidebar. The first create installs dsh on the host (about 1 minute, ~844 MB); later creates reuse the runtime.
 4. **Remote rows** in the native sidebar show a cloud status glyph, the project name and the device name. Hover the row for **New session** and `...`; the menu offers **Edit** (rename) and **Delete project**.
-5. **Chat** runs on the remote host and streams live: reasoning and answer text arrive incrementally over one SSH tail channel; closing the local app does not stop the remote turn.
+5. **Chat** runs on the remote host and streams live: reasoning and answer text arrive incrementally over one SSH tail channel; the next turn's runner is already booted, so the first token appears in well under a second. Closing the local app does not stop the remote turn.
 6. **Close DeepSeek Harness.** The remote runner keeps running. Reopen; the bridge resumes from its journal and the row reattaches to the same workspace.
 
 ## Data
@@ -106,6 +107,7 @@ The remote Web listener binds `127.0.0.1` only; no LAN port is opened.
 - Interaction chain verified end-to-end: saved-device connect → runtime prepare hits cache → folder picker → create → the new native workspace opens automatically.
 - Remote rows render the cloud glyph, project name and device name; the hover menu renames/deletes the same workspace record and native row.
 - Live streaming verified end-to-end with the real remote runner: `start` / `text-delta` / `reasoning-delta` frames reach the local bridge before the durable `assistant/message`; a long answer produced 140 live frames, and a second turn in the same session streamed normally.
+- Warm runner measured against the same host: cold launch `step/start` 4.96 s and first text 5.40 s after send; prewarmed launch `step/start` 0.20 s and first text 0.7 s; a follow-up sent the instant the previous turn ended still takes the cold path (~3.3 s) because the next runner boots only after the previous process exits, but the session transcript is complete (`我上一条消息说了什么` returned the exact prior text).
 - Resume verified: dispose the local bridge while the remote turn is running, attach a new bridge to the same session id → it restarts from the journal offset, drains the remaining JSONL and appends the final message/turn end without duplicates.
 - Local **Choose folder** opens the system dialog in the desktop app; the harness also verifies the HTTP fallback when no native picker is exposed.
 - After a workspace is removed from the row menu, the native projection drops the anchor row (no ghost remote project).
@@ -120,6 +122,7 @@ The remote Web listener binds `127.0.0.1` only; no LAN port is opened.
 - Linux remotes only: WSL distributions and Docker containers must provide a Linux `bash`/`sh`, Node ≥ 22 or a way to download the portable runtime (curl, wget or an existing Node).
 - WSL requires a Windows desktop with the WSL optional feature installed; Docker requires a running daemon and a running container.
 - The remote host needs access to an npm registry (default npmmirror).
+- A prompt sent the instant the previous turn ends still pays one cold runner start (~3 s). The warm runner cannot boot earlier because it must load the session after the previous process has written the finished turn; normal typing pauses hit the warm path. Targets without `mkfifo` (some minimal containers) fall back to cold starts automatically.
 - Credentials are synced, but local model selection/settings are not yet mapped to the remote headless runner.
 - Background connect progress is in-memory: restarting the local app drops the pill (created workspaces are restored from `state.json`); there is no cancel button for an in-flight install/create.
 - No local mirror of remote project files; the agent and tools run inside the target.

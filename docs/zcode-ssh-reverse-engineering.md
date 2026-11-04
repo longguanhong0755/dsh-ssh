@@ -378,6 +378,8 @@ type SessionAssistantStreamFrame =
 
 `revision` 必须从 1 连续递增，`chunk.index` 是帧序号（块下标在 `chunk.index` 里），`end.index` 必须等于已发 chunk 数；`end.outcome.seq` 指向本地 `assistant/message` 的 durable seq，否则客户端会 rebaseline。
 
+冷启动余量：headless 进程启动到能接收任务需要 4~5 秒（`dsh --version` 仅 126 ms，成本在 profile/插件初始化）。`bin.js` 支持用 `-` 从 stdin 读任务，因此 bridge 在空闲时预先启动下一轮进程，用一个 FIFO 保持 stdin 打开，发送时写入 prompt 再杀掉持有者触发 EOF；实测 `step/start` 从 4.96 s 降到 0.20 s，首段文本从 5.40 s 降到 0.7 s。预热进程必须等上一轮进程退出后再启动，才能载入包含上一轮结果的会话快照；因此「上一轮刚结束就追发」仍是冷启动（约 3.3 s）。无人发送时持有者按 TTL 退出，runner 得到 EOF 后以 `a task is required` 干净退出，不写入会话。
+
 ### 5.3 3.17.2 源码级还原（2026-11 安装版）
 
 本次直接从未打包的渲染层源码（`out/renderer/assets/styles-n-UNIiNg.js`，含 JSX 与组件定义）和编译后的 `styles-CDRCIIoN.css` 取值，不再依赖截图推断。
