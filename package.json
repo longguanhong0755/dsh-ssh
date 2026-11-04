@@ -1,0 +1,61 @@
+{
+  "name": "dsh-ssh-remote",
+  "version": "0.1.0",
+  "description": "ZCode-style SSH remote workspaces for DeepSeek Harness: deploy and supervise a persistent dsh runtime on an SSH host, project it into the native workspace list, and reopen recent remote directories in one click.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/longguanhong0755/dsh-ssh.git"
+  },
+  "homepage": "https://github.com/longguanhong0755/dsh-ssh#readme",
+  "bugs": {
+    "url": "https://github.com/longguanhong0755/dsh-ssh/issues"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "files": [
+    "lib",
+    "bin",
+    "docs",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "ssh",
+    "remote-workspace"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.5"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "ssh2": "^1.16.0"
+  }
+}

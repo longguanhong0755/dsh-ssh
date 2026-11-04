@@ -1,0 +1,11 @@
+node_modules/
+*.tgz
+*.log
+
+# Local runtime state (hosts, workspaces, passwords, TOFU fingerprints)
+state.json
+known_hosts.json
+bridge.json
+
+.DS_Store
+Thumbs.db

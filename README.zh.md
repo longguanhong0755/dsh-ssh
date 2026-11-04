@@ -1,0 +1,301 @@
+# dsh-ssh-remote
+
+**把 ZCode 的远程工作区能力复刻到 DeepSeek Harness（dsh）的插件：SSH、WSL 和 Docker。**
+
+远程 `dsh` 在 SSH 服务器、WSL 发行版或 Docker 容器中以 systemd 服务（或 `setsid` 脱离会话）持续运行；远程会话由目标环境内脱离终端的 `dsh --profile headless` 执行。本地只负责选择工作区、显示原生对话和监控状态，不再代理远程控制台。关闭本地 dsh 之后，目标环境里的远程 dsh **不会停止**。
+
+> 适用版本：DeepSeek Harness Desktop `0.2.1-rc.5`（本插件在 203.0.113.10 上完成端到端验证）。
+
+---
+
+## 它做了什么
+
+| 能力 | 说明 |
+|---|---|
+| 目标类型 | SSH（密码 / 私钥 / 私钥口令 / SSH agent / keyboard-interactive）、Windows 上的 WSL 发行版（`wsl.exe --exec bash -lc`，默认或指定 distro/user）和 Docker 容器（`docker exec -i … sh -lc`，支持名称/id/前缀，必须处于运行中） |
+| SSH 主机管理 | 主机密钥 TOFU 校验；连接测试、延迟与远程 Node 检测 |
+| 添加连接（ZCode 1:1） | 完整复刻 ZCode 向导：步骤条「选择设备 / 连接 / 选择目录」、`已保存的设备`、`SSH config 中的 Host`、`WSL 发行版`、`运行中的容器` 分组，以及 `新建 SSH 连接` / `手动输入 WSL` / `手动输入 Docker`；设置页使用 ZCode 各类型原始表单（WSL 发行版 datalist + Linux 用户提示/root 警告；Docker 选择/手动分段 + 容器选择浮层）；已保存设备直接点击连接；每一步都可最小化为 ZCode 式后台卡片 |
+| 最近工作区 | 每个设备显示最近 3 个远程目录；点击即打开对应的原生工作区（服务未运行时自动在后台拉起），不需要重走向导 |
+| 连接可后台 | 建立连接和启动工作区都可以「在后台继续」；右下角浮动提示显示进度，完成后直接打开工作区，重新点开则恢复向导 |
+| 从 SSH config 导入 | 解析本机 `~/.ssh/config` 的 Host 块，自动填充主机、端口、用户名和 IdentityFile |
+| 一键创建远程工作区 | 连接阶段就检查/安装共享 dsh 运行时，目录步骤只做服务和健康检查；自动完成：连通目标（SSH/WSL/Docker）→ 检测/下载 Node → 安装 `@deepseek-ai/dsh` → 同步模型凭证 → 写入启动脚本 → 注册 systemd/`setsid` 服务 → 健康检查 |
+| 远程常驻 | 服务方式优先 `systemd`（root 系统服务，或非 root 用户的 user service + linger）；无 systemd 时用 `setsid nohup`，并写入 `@reboot` crontab。SSH 断开、本地关闭都不影响远程 |
+| 本地状态监控 | 运行中 / 启动中 / 已停止 / 异常 / 主机不可达；PID、运行时长、内存、CPU、HTTP 状态、端口、最近检测时间。CPU 用 `/proc/<pid>/stat` 0.5 秒差值计算，内存取 `/proc/<pid>/status` 的 VmRSS，不再使用会误导的 `ps` 生命周期平均值 |
+| 原生工作区 | 每个远程工作区投影到左侧原生工作区列表；其 agent 由 `lib/bridge.js` 转发到远端 headless 会话；面板和最近目录都能直接选中该原生行 |
+| 生命周期操作 | 启动、停止、重启、日志（journalctl / tail）、删除（只删除服务与远程运行目录，保留远程项目目录） |
+| 凭证同步 | 默认把本机 `$DSH_HOME/.credentials.yaml` 以 0600 同步到远程每个工作区自己的 `DSH_HOME`，远程模型可直接使用 |
+| 兼容旧配置 | 首次加载会自动导入 ZCode 的 `~/.dsh/dsh-ssh.json` 主机 |
+
+本地 UI 只做「原生对话 + 看状态」，agent 进程、工具和文件都在服务器上执行——这正是需求里「那边正常跑、这边只看状态」的形态。
+
+---
+
+## 界面
+
+「新建连接」向导按 ZCode 渲染层组件 `OVn`/`xVn`/`yVn`/`nVn`/`Smt`/`rmt`/`hmt`/`Cmt` 做 1:1 重建：DOM 层级、间距、字号、圆角和 ZCode 设计令牌（默认浅色，`body[data-ds-dark-theme]` 下切换为 ZCode 深色）与 ZCode 一致，交互为设备优先：
+
+- 已保存设备：点击直接连接，右侧铅笔进入编辑；
+- 设备下方：最近工作区目录，一键打开原生工作区；
+- 目录步骤：已连接横幅、设备重命名、最近目录、`将打开 …`；
+- 连接/创建：可收起到后台，右下角进度提示，完成后直接打开工作区。
+
+| 新建连接（设置 → 远程设备） | 从 SSH config 导入 |
+|---|---|
+| ![新建连接](docs/screenshot-new-connection.png) | ![从 SSH config 导入](docs/screenshot-ssh-import.png) |
+
+| 创建项目（设备选择） | 选择文件夹 |
+|---|---|
+| ![创建项目](docs/screenshot-device-picker.png) | ![选择文件夹](docs/screenshot-folder-picker.png) |
+
+三个界面——新建连接、创建项目、居中的选择文件夹——均按 ZCode 3.17.2 渲染层重建：DOM 结构、class 数值、字号与文案一致。截图使用文档保留地址段（`192.0.2.0/24`、`203.0.113.0/24`）。
+
+---
+
+## 架构
+
+```
+┌────────────────────────── 本机 ──────────────────────────┐
+│ DeepSeek Harness Desktop (dsh 0.2.1-rc.5)               │
+│                                                         │
+│  dsh-ssh-remote 宿主插件                                 │
+│   ├─ ssh2 连接池（密码/密钥/agent/TOFU）                 │
+│   ├─ 远程部署器（Node + dsh + 凭证 + 服务）              │
+│   ├─ 状态轮询（systemctl/journalctl/proc/HTTP）            │
+│   ├─ 远端 headless 会话桥（lib/bridge.js，本地会话镜像）   │
+│   └─ /api/ssh-remote/* 路由（Desktop IPC / Web）          │
+│                                                         │
+│  dsh-ssh-remote 客户端插件                               │
+│   ├─ 设置 → 远程设备（主机 CRUD / 测试 / 部署默认值）     │
+│   ├─ 侧边栏 → SSH 远程（状态卡片 / 启动停止重启 / 日志）  │
+│   └─ 添加工作区 → SSH 远程（ZCode 四步连接流程）          │
+└──────────────────────────┬──────────────────────────────┘
+                           │ SSH (22)
+┌──────────────────────────▼──────────────────────────────┐
+│ 远程 Linux 服务器                                         │
+│                                                         │
+│  ~/.dsh-remote/runtime/dsh-0.2.1-rc.5/   ← npm 安装      │
+│  ~/.dsh-remote/workspaces/<id>/home/     ← 独立 DSH_HOME │
+│  ~/.dsh-remote/workspaces/<id>/logs/     ← setsid 日志   │
+│  systemd: dsh-ssh-remote-<id>.service                    │
+│    ExecStart: node .../dsh/lib/bin.js --profile web      │
+│               --no-open --port 3908x                     │
+│    监听 127.0.0.1:3908x，journal 输出 token URL           │
+│  headless: setsid dsh --profile headless --json          │
+│    （每个本地会话对应一个远端 session，事件流回本地）      │
+│                                                         │
+│  远程项目目录（用户选择，不会被删除）                      │
+└─────────────────────────────────────────────────────────┘
+```
+
+远程 dsh Web 只绑定 `127.0.0.1`；本机通过 SSH direct-tcpip 隧道访问，不向局域网暴露端口。
+
+---
+
+## 安装
+
+### 方式一：安装脚本（推荐）
+
+在 **DeepSeek Harness 已经启动过一次**（已存在 `~/.dsh/profiles/desktop`）之后：
+
+```powershell
+node C:workdsh-ssh-remote\bin\install.mjs --profile desktop
+```
+
+脚本会：
+
+1. 在 `~/.dsh/profiles/desktop/package.json` 的 `dependencies` 写入 `link:<本插件绝对路径>`；
+2. 把 `dsh-ssh-remote` 追加到 `dsh.profile.bundles`；
+3. 在 `~/.dsh/profiles/desktop/node_modules/` 建立目录联接（Windows junction / POSIX symlink）。
+
+然后**完全退出并重新启动 DeepSeek Harness**。
+
+### 方式二：手动安装
+
+编辑 `~/.dsh/profiles/desktop/package.json`：
+
+```json
+{
+  "dependencies": {
+    "dsh-ssh-remote": "link:C:/work/dsh-ssh-remote"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "...",
+        "dsh-ssh-remote"
+      ]
+    }
+  }
+}
+```
+
+并建立链接：
+
+```powershell
+cmd /c mklink /J "%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-ssh-remote" "C:workdsh-ssh-remote"
+```
+
+重启 DeepSeek Harness。侧边栏出现 **SSH 远程** 即安装成功。
+
+## 卸载
+
+```powershell
+node C:workdsh-ssh-remote\bin\uninstall.mjs --profile desktop
+```
+
+卸载只移除本地插件与 bundle 选择，不会删除远程服务；需要时在 UI 中对每个工作区点「删除」。
+
+---
+
+## 使用
+
+### 1. 添加 SSH 主机
+
+1. 左下角账号菜单 → **设置** → **远程设备（dsh-ssh-remote）**；
+2. 点 **添加主机**，填写名称、IP、端口、用户名、密码（或私钥路径 / 口令）；
+3. 点 **测试连接**，应显示 `连接成功 · <延迟>ms · Linux x86_64 · Node v22.x`；
+4. **保存**。
+
+> 首次连接采用 TOFU：记录主机指纹；之后指纹变化会拒绝连接（可在主机表单里改成 `verify` 或 `off`）。
+
+### 2. 创建远程工作区
+
+- 侧边栏 **SSH 远程** → **新建远程工作区**；或
+- 工作区列表 **添加工作区** → 顶部 **SSH 远程** 标签。
+
+弹出的是 ZCode 同款设备流程，但交互是「设备优先」：
+
+1. **连接远程**：搜索设备 / `~/.ssh/config` Host；已保存设备本身可点击，**直接连接**，不会再先跳到表单；设备下方显示最近 3 个工作区，点一下直接打开对应原生工作区；右侧铅笔按钮才进入编辑；底部固定 **＋ 新建 SSH 连接**；
+2. **新建连接**（仅新连接或编辑时）：主机/端口、用户名、认证方式（密码/私钥）、密码可见切换、高级选项；右上角 **从 SSH config 导入**；
+3. **建立连接**：保存连接并校验 SSH，随后安装/复用远端 dsh 运行时（运行时已存在时通常 1 秒内跳过）；阶段进度和日志实时输出，可 **在后台继续**；
+4. **选择目录**：绿色「已连接」横幅、设备重命名、最近目录快捷标签、内嵌远程浏览器，底部提示 **将打开 {path}**。
+
+点 **在此目录打开工作区** 后，创建任务同样可以在后台完成；完成后会自动选中左侧的原生工作区（新会话），不再多一个「完成」弹窗。第一次会在远程安装 dsh（本测试环境约 1 分钟，约 844 MB），之后同一版本复用缓存。进度窗口会显示：
+
+```
+主机: root@203.0.113.10:22
+目录: /root/dsh-demo
+使用远程 Node v22.23.2 (/usr/local/bin/node)
+dsh 0.2.1-rc.5 已部署 (...)
+已同步本地凭证 (.credentials.yaml)
+远程端口: 39081
+服务方式: systemd
+远程 dsh 已就绪 (HTTP 401, PID 2549823)
+```
+
+### 3. 打开已有远程工作区
+
+三种方式等价：
+
+- 设备列表里点设备下的最近目录标签；
+- 状态面板里点 **打开工作区**；
+- 直接点左侧原生工作区行。
+
+前两种都会调用原生工作区选择（`uiWorkspace.openWorkspace`），落在同一个工作区，而不是再创建一个新目录。服务已停止时会在后台尝试启动，状态面板仍显示真实状态。
+
+### 4. 看状态
+
+状态卡片示例：
+
+```
+● ui-demo   运行中   root@203.0.113.10:39081   systemd
+/root/dsh-demo
+运行 1m 51s   内存 265 MB   CPU 0.4%   HTTP 401   端口 39081   PID 2491498
+[停止] [重启] [日志] [删除]
+```
+
+- **内存 / CPU**：CPU 用 `/proc/<pid>/stat` 的 0.5 秒差值计算，内存读 `/proc/<pid>/status` 的 `VmRSS`，与服务器 `ps`/`top` 一致；
+- **停止 / 启动 / 重启**：直接操作远程 systemd / setsid 服务；
+- **日志**：systemd 用 `journalctl -u <unit>`，setsid 用 `tail`；
+- **删除**：停止并删除 unit、远程 `~/.dsh-remote/workspaces/<id>`；**不会删除远程项目目录**。
+
+### 5. 关闭本地之后
+
+直接关闭 DeepSeek Harness 即可。远程服务由 systemd（`Restart=always`）托管；重新打开本地 dsh 后，插件从 `$DSH_HOME/ssh-remote/state.json` 恢复工作区列表，状态轮询会重新显示同一个 PID 和持续增长的 uptime。
+
+---
+
+## 数据与安全
+
+本机：
+
+```
+$DSH_HOME/ssh-remote/
+  state.json        # 主机 + 工作区 + 设置（0600；密码按 ZCode 的方式保存在此）
+  known_hosts.json  # TOFU 主机指纹
+```
+
+远程：
+
+```
+~/.dsh-remote/
+  runtime/dsh-<version>/     # 共享 npm 安装
+  workspaces/<id>/
+    home/                    # 独立 DSH_HOME（含同步来的 .credentials.yaml，0600）
+    logs/web.log             # setsid 模式日志
+    run/start.sh stop.sh     # 启动/停止脚本
+```
+
+安全要点：
+
+- 远程 dsh 只监听 `127.0.0.1`，不对局域网开放；本地不再做端口转发；
+- 连接密码保存在本机 `state.json`（0600），不写入远程；
+- 建议使用专用低权限 SSH 账号；root 仅用于测试环境；
+- 凭证同步是显式设置项，可关闭后在远程自行配置模型。
+
+---
+
+## 已验证环境（203.0.113.10）
+
+- AlmaLinux 9.5，x86_64，8 核 / 31 GB 内存 / 35 GB 可用
+- Node v22.23.2、npm 10.9.8、systemd 252
+- 结果：
+  - 远程安装 `@deepseek-ai/dsh@0.2.1-rc.5`：约 1 分钟
+  - 便携 Node 下载 + 解压 + 校验：39 秒，`v22.23.2`
+  - systemd 服务启动后 HTTP 返回 `401`（预期，监听已就绪）
+  - 真实指标核对：RSS 与 `ps -o rss`/`VmRSS` 一致
+  - 关闭本地 dsh 10 秒后：远程 PID 不变、uptime 持续增长、`systemctl is-active = active`
+  - 重新打开本地 dsh：状态卡片恢复同一个 PID、uptime 连续
+  - 停止/启动/重启、日志、模型列表（`loaded 2 model(s)`）均正常
+  - 交互链路实测：设备行直接连接（364 ms 探测）→ 预装运行时命中缓存 → 目录步骤 → 创建 → 自动进入原生工作区；已有远程目录标签一键打开原生工作区；「在后台继续」后右下角进度提示持续更新，完成后可直接打开工作区
+  - 移除工作区后，启动时的原生投影会清理遗留的锚点行，不再出现幽灵远程项目
+
+> 注意：root 服务日志使用 journal，而不是 `/root` 下的文件；这是为了避开 RHEL 系 SELinux 对 `init_t` 写用户家目录的拒绝（`209/STDOUT`）。
+
+> SSH/WSL/Docker 共用同一命令层。开发机未安装 WSL 可选组件、也没有 Docker daemon，因此 WSL/Docker 的发现与错误链路已在 UI 中验证到 `当前系统未检测到可用的 WSL 环境` / `当前系统未检测到可用的 Docker 环境`，并验证了各自的表单与徽标；真实发行版/容器内的完整部署仍需在具备对应环境的主机上验证。
+
+---
+
+## 故障排查
+
+| 现象 | 处理 |
+|---|---|
+| 设置页没有「远程设备」 | 确认 profile `bundles` 包含 `dsh-ssh-remote`、`node_modules` 链接存在，并完全重启 dsh |
+| `SSH 认证失败` | 检查用户名/密码/私钥；密码登录需要服务器允许 password 或 keyboard-interactive |
+| `远程 dsh 安装失败` | 检查远程能否访问 `https://registry.npmmirror.com`；可在设置里换 npm 镜像；查看任务日志 |
+| `远程 dsh 未在 120s 内就绪` | 看「日志」；常见原因是远程 Node < 22 且便携 Node 下载失败，或模型凭证未同步导致启动阶段报错 |
+| systemd 启动失败 | 插件会回退到 `setsid`；非 root 用户可执行 `loginctl enable-linger <user>` 让 user service 在登出后继续 |
+| 主机不可达 | 状态卡片显示「主机不可达」；检查网络/VPN，恢复后点「刷新」 |
+
+---
+
+## 限制
+
+- 目标环境目前面向 **Linux**：SSH 主机、WSL 发行版和 Docker 容器都必须提供 Linux `bash`/`sh`，以及 Node ≥ 22 或可下载便携运行时的能力（curl / wget / 已有 Node）；
+- WSL 需要 Windows 桌面且已安装 WSL 可选组件；Docker 需要运行中的 daemon 和运行中的容器；Windows 远程主机未实现；
+- 远程需要能访问 npm 镜像；完全离线环境需要预先上传 dsh 运行时（可后续扩展）；
+- 本地侧不做远程文件镜像；agent 会话通过 `lib/bridge.js` 在目标环境 headless 执行，本机只保留会话镜像；
+- 同步的是 `.credentials.yaml`，不包含本机 `settings.yaml` / 模型选择；远端 headless 目前使用远程默认模型；
+- 「后台连接」的进度保存在本地进程内存：重启本地 dsh 后浮层会消失（已创建的工作区仍从 `state.json` 恢复）；正在安装/创建的任务没有「中止」按钮；
+- Docker 容器被删除后其远程工作区随之消失；WSL 发行版被终止/注销后服务也会停止。
+- 未实现 ZCode 的 WSL2 代理自动改写（把 loopback 代理换成 Windows 宿主机网关）；如发行版内需要代理，请配置可直连的 registry/代理。
+
+---
+
+## 逆向依据
+
+见 [`docs/zcode-ssh-reverse-engineering.md`](docs/zcode-ssh-reverse-engineering.md)：ZCode 3.17.2 的 `SSHBackend`、远程资产部署（`~/.zcode/server` + `agents/<id>/zcode.cjs` wrapper）、远程工作区事件与重连逻辑、设置页「新建连接」/「创建项目」/「选择文件夹」三个 1:1 界面，以及 `rea` 证据包摘要。
+
+## License
+
+MIT

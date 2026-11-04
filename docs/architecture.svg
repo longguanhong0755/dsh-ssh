@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7aa2f7"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="700" fill="#0f1115"/>
+  <text x="600" y="38" fill="#e6edf3" font-size="22" font-weight="600" text-anchor="middle">dsh-ssh-remote — local monitor, persistent remote dsh</text>
+
+  <!-- local -->
+  <rect x="40" y="70" width="520" height="580" rx="14" fill="#171a21" stroke="#2b303b"/>
+  <text x="64" y="102" fill="#e6edf3" font-size="16" font-weight="600">Local machine — DeepSeek Harness Desktop</text>
+
+  <rect x="70" y="125" width="460" height="88" rx="10" fill="#1c2333" stroke="#3b4b6b"/>
+  <text x="90" y="151" fill="#c9d5ea" font-size="14" font-weight="600">Client plugin</text>
+  <text x="90" y="176" fill="#9aa7bd" font-size="12.5">Settings → SSH Remote · Sidebar status cards</text>
+  <text x="90" y="197" fill="#9aa7bd" font-size="12.5">Add workspace → SSH Remote tab (browse / create)</text>
+
+  <rect x="70" y="233" width="460" height="88" rx="10" fill="#1c2333" stroke="#3b4b6b"/>
+  <text x="90" y="259" fill="#c9d5ea" font-size="14" font-weight="600">Host plugin</text>
+  <text x="90" y="284" fill="#9aa7bd" font-size="12.5">ssh2 pool · deployer · service lifecycle · status poller</text>
+  <text x="90" y="305" fill="#9aa7bd" font-size="12.5">loopback tunnel 127.0.0.1:&lt;random&gt; → remote 127.0.0.1:3908x</text>
+
+  <rect x="70" y="341" width="460" height="76" rx="10" fill="#1c2333" stroke="#3b4b6b"/>
+  <text x="90" y="367" fill="#c9d5ea" font-size="14" font-weight="600">JSON API</text>
+  <text x="90" y="391" fill="#9aa7bd" font-size="12.5">/api/ssh-remote/* over Desktop IPC, /ssh-remote/* over Web</text>
+
+  <rect x="70" y="437" width="460" height="88" rx="10" fill="#1c2333" stroke="#3b4b6b"/>
+  <text x="90" y="463" fill="#c9d5ea" font-size="14" font-weight="600">Local state</text>
+  <text x="90" y="488" fill="#9aa7bd" font-size="12.5">$DSH_HOME/ssh-remote/state.json (0600)</text>
+  <text x="90" y="509" fill="#9aa7bd" font-size="12.5">known_hosts.json · survives app restart, reattaches</text>
+
+  <rect x="70" y="545" width="460" height="78" rx="10" fill="#14251c" stroke="#2f6b45"/>
+  <text x="90" y="571" fill="#9be3b4" font-size="14" font-weight="600">Open console</text>
+  <text x="90" y="595" fill="#86b99a" font-size="12.5">SSH local forward · tokenized dsh Web URL</text>
+
+  <!-- remote -->
+  <rect x="640" y="70" width="520" height="580" rx="14" fill="#171a21" stroke="#2b303b"/>
+  <text x="664" y="102" fill="#e6edf3" font-size="16" font-weight="600">Remote Linux host (e.g. 203.0.113.10)</text>
+
+  <rect x="670" y="125" width="460" height="100" rx="10" fill="#1c2333" stroke="#3b4b6b"/>
+  <text x="690" y="151" fill="#c9d5ea" font-size="14" font-weight="600">Runtime (shared per version)</text>
+  <text x="690" y="176" fill="#9aa7bd" font-size="12.5">~/.dsh-remote/runtime/dsh-0.2.1-rc.5/</text>
+  <text x="690" y="197" fill="#9aa7bd" font-size="12.5">Node 22 (host Node or portable download) · npm @deepseek-ai/dsh</text>
+
+  <rect x="670" y="245" width="460" height="116" rx="10" fill="#1c2333" stroke="#3b4b6b"/>
+  <text x="690" y="271" fill="#c9d5ea" font-size="14" font-weight="600">Workspace</text>
+  <text x="690" y="296" fill="#9aa7bd" font-size="12.5">~/.dsh-remote/workspaces/&lt;id&gt;/home/ (own DSH_HOME)</text>
+  <text x="690" y="317" fill="#9aa7bd" font-size="12.5">.credentials.yaml (0600) · logs/ · run/start.sh</text>
+  <text x="690" y="338" fill="#9aa7bd" font-size="12.5">remote project dir: user-selected, never deleted</text>
+
+  <rect x="670" y="381" width="460" height="116" rx="10" fill="#14251c" stroke="#2f6b45"/>
+  <text x="690" y="407" fill="#9be3b4" font-size="14" font-weight="600">Persistent service</text>
+  <text x="690" y="432" fill="#86b99a" font-size="12.5">systemd: dsh-ssh-remote-&lt;id&gt;.service (Restart=always)</text>
+  <text x="690" y="453" fill="#86b99a" font-size="12.5">or setsid nohup + @reboot crontab</text>
+  <text x="690" y="474" fill="#86b99a" font-size="12.5">dsh --profile web --no-open --port 3908x</text>
+
+  <rect x="670" y="517" width="460" height="100" rx="10" fill="#1c2333" stroke="#3b4b6b"/>
+  <text x="690" y="543" fill="#c9d5ea" font-size="14" font-weight="600">Remote dsh Web</text>
+  <text x="690" y="568" fill="#9aa7bd" font-size="12.5">listens 127.0.0.1 only · prints tokenized URL to journal</text>
+  <text x="690" y="589" fill="#9aa7bd" font-size="12.5">agent / tools / filesystem all run here</text>
+
+  <!-- arrows -->
+  <line x1="530" y1="169" x2="640" y2="169" stroke="#7aa2f7" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="585" y="160" fill="#7aa2f7" font-size="11" text-anchor="middle">SSH 22</text>
+
+  <line x1="530" y1="277" x2="640" y2="277" stroke="#7aa2f7" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="585" y="268" fill="#7aa2f7" font-size="11" text-anchor="middle">deploy</text>
+
+  <line x1="530" y1="584" x2="640" y2="560" stroke="#9be3b4" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="585" y="598" fill="#9be3b4" font-size="11" text-anchor="middle">forwardOut</text>
+
+  <line x1="640" y1="451" x2="530" y2="451" stroke="#7aa7c7" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+  <text x="585" y="442" fill="#7aa7c7" font-size="11" text-anchor="middle">systemctl / journal / ps / HTTP</text>
+
+  <text x="600" y="675" fill="#6b7688" font-size="11.5" text-anchor="middle">Closing the local app tears down the tunnel and status poller only; the remote systemd service keeps running.</text>
+</svg>
