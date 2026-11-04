@@ -258,7 +258,7 @@ $DSH_HOME/ssh-remote/
   - 关闭本地 dsh 10 秒后：远程 PID 不变、uptime 持续增长、`systemctl is-active = active`
   - 重新打开本地 dsh：bridge 从 journal 续读，同一个 PID、uptime 连续
   - 流式实测：真实远端 runner 产生 `start` / `reasoning-delta` / `text-delta` 帧，长回答共 140 帧；第二回合同一会话继续流式；取消时收到 abandoned end + `turn/end cancelled`
-  - 预热实测：冷启动发送后 `step/start` 4.96 秒、首段文本 5.40 秒；预热后 0.20 秒 / 0.7 秒；上一轮刚结束就追发时仍走冷路径（约 3.3 秒），但会话上下文完整（询问上一条消息能原样返回）
+  - 预热实测：冷启动发送后 `step/start` 4.96 秒、首段文本 5.40 秒；预热后 0.20 秒 / 0.7 秒；上一轮刚结束就追发时仍走冷路径（约 3.3 秒），但会话上下文完整（询问上一条消息能原样返回）；runner 使用工作区 DSH home 内的 `NODE_COMPILE_CACHE`，冷启动再快约 0.5 秒
   - 断点续传实测：会话进行中销毁本地 bridge，再以同一 session id 挂载 → 从 journal 偏移续读，补齐剩余 JSONL，最终消息与 turn end 无重复
   - 交互链路实测：设置/SSH 面板只添加机器；主界面创建项目 → 原生文件夹对话框（本机）或 ZCode 文件夹浏览器（远程）→ 创建 → 自动进入原生工作区
   - 远程行显示云朵 + 项目名 + 设备名；行菜单编辑/删除同步插件 state 和原生行
