@@ -22,7 +22,7 @@
 | 远程常驻 | 服务方式优先 `systemd`（root 系统服务，或非 root 用户的 user service + linger）；无 systemd 时用 `setsid nohup`，并写入 `@reboot` crontab。SSH 断开、本地关闭都不影响远程 |
 | 本地状态监控 | 运行中 / 启动中 / 已停止 / 异常 / 主机不可达；PID、运行时长、内存、CPU、HTTP 状态、端口、最近检测时间。CPU 用 `/proc/<pid>/stat` 0.5 秒差值计算，内存取 `/proc/<pid>/status` 的 VmRSS，不再使用会误导的 `ps` 生命周期平均值 |
 | 原生工作区 | 每个远程工作区投影到左侧原生工作区列表；其 agent 由 `lib/bridge.js` 转发到远端 headless 会话；面板和最近目录都能直接选中该原生行 |
-| 预热 runner | 远程工作区空闲时，bridge 会提前启动下一轮的 headless runner，并通过 FIFO 在发送时喂入 prompt。实测：发送后 `step/start` 0.20 秒、首段文本 0.7 秒，冷启动则是 4.96 / 5.40 秒；runner 每 5 分钟刷新一次，并有 TTL 兜底。`DSH_SSH_NO_PREWARM=1` 可关闭 |
+| 预热 runner | 远程工作区空闲时，bridge 会提前启动下一轮的 headless runner，并通过 FIFO 在发送时喂入 prompt。实测：发送后 `step/start` 0.20 秒、首段文本 0.7 秒，冷启动则是 4.96 / 5.40 秒；最多保留 2 个预热进程（每个约 200 MB RSS），每 5 分钟刷新一次，并有 TTL 兜底。`DSH_SSH_NO_PREWARM=1` 可关闭，`DSH_SSH_MAX_WARM` 可调整上限 |
 | 生命周期 | 创建/打开时自动启动，不再暴露单工作区的启停按钮；从行菜单删除时停止并清理服务与运行目录（保留远程项目目录） |
 | 凭证同步 | 默认把本机 `$DSH_HOME/.credentials.yaml` 以 0600 同步到远程每个工作区自己的 `DSH_HOME`，远程模型可直接使用 |
 | 兼容旧配置 | 首次加载会自动导入 ZCode 的 `~/.dsh/dsh-ssh.json` 主机 |
@@ -205,7 +205,7 @@ dsh 0.2.1-rc.5 已部署 (...)
 - 远程行第一个图标是云朵：在线/运行、启动中（旋转）、离线、异常分别使用 ZCode 的 `cloud` / `loader-circle` / `cloud-off` / `cloud-x`；
 - 运行中、内存、CPU、HTTP 状态仍由宿主后台轮询真实采集（`/proc/<pid>/stat`、`/proc/<pid>/status`），但会避开正在进行的流式会话；
 - 远程会话是流式的：远端 `agent/assistant-stream` 帧由 profile 内的 `dsh-ssh-stream` 投影插件写到 JSONL，bridge 用一条 `tail -f` SSH 通道实时搬运；本地按原生 `assistant-stream` 帧渲染，step 结束时再用 durable `assistant/message` 结算；
-- 下一轮的 runner 会提前预热：工作区空闲时 bridge 先启动一个从 stdin/FIFO 读取任务的 headless 进程，发送时写入 prompt 并关闭 FIFO，因此跳过了 4~5 秒的进程启动；`step/start` 约 0.2 秒、首段文本约 0.7 秒。预热进程每 5 分钟轮换一次，无人发送时由 TTL（默认 300 秒）自动退出；
+- 下一轮的 runner 会提前预热：工作区空闲时 bridge 先启动一个从 stdin/FIFO 读取任务的 headless 进程，发送时写入 prompt 并关闭 FIFO，因此跳过了 4~5 秒的进程启动；`step/start` 约 0.2 秒、首段文本约 0.7 秒。最多同时保留 2 个预热进程（每个约 200 MB RSS），按最近使用淘汰；每 5 分钟轮换一次，无人发送时由 TTL（默认 300 秒）自动退出；
 - 上一轮结束后立刻追发消息仍会走一次冷启动（约 3 秒），因为预热必须等上一轮进程退出、会话写盘完成后才能载入完整上下文；正常打字间隔下都会命中预热。
 - 关闭本地 dsh 不会停止远端 turn：runner 仍是 `setsid nohup` 脱离进程；重新打开后 bridge 从 journal 的字节偏移续读，不重复追加；
 - 手动启停/日志按钮不再放在工作区行；生命周期随创建/打开自动管理，状态由云朵和提示文案表达。
