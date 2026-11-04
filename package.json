@@ -1,6 +1,6 @@
 {
   "name": "dsh-ssh-remote",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "ZCode-style SSH remote workspaces for DeepSeek Harness: deploy and supervise a persistent dsh runtime on an SSH host, project it into the native workspace list, and reopen recent remote directories in one click.",
   "license": "MIT",
   "repository": {

@@ -338,6 +338,46 @@ exec "$runtime_root/node" "$HOME/.zcode/server/agents/${agentId}/zcode.cjs" "$@"
 - `Cmt` → 已连接横幅、设备重命名、最近目录、`将打开`、`RemoteBrowser`；
 - 打开动作直接调用 DSH 的 `uiWorkspace.openWorkspace(nativeWorkspaceId)`，落到原生工作区，而不是再造一个成功弹窗。
 
+## 5.2 项目行与流式会话
+
+ZCode 的项目行（`styles-Dv5E6Odo.js` 的 `virtual-project-row`）是「图标 + 名称 + 设备名」的横排：
+
+```js
+<div data-testid="virtual-project-row" class="... flex h-8 items-center gap-1 ...">
+  <span class="flex size-4 ...">              // 图标位
+    <oM presentation={remoteStatus} project /> // cloud/cloud-off/cloud-alert/cloud-x/spinner
+  </span>
+  <span class="flex min-w-0 items-baseline gap-2">
+    <span class="truncate text-ui-base ...">{project.name}</span>
+    <span data-testid="project-device" class="max-w-24 truncate text-ui-sm text-remote-foreground-muted">
+      {deviceName}
+    </span>
+  </span>
+  ...actions (menu/edit/pin/delete, new task)
+</div>
+```
+
+- 云朵状态来自 `kA`：online → `cloud`；starting/reconnecting → `loader-circle`（`animate-spin`）；offline/stopped → `cloud-off`；failed → `cloud-x`（云 + 右下角 x）。项目行里 online 云朵用 `text-remote-foreground-muted`。
+- 悬停操作由 `virtual-project-actions` 渲染：`device-settings`、`edit`、`pin/unpin`、`delete`（危险色）。删除文案强调「只从本机移除，{device} 上的项目及其他客户端不受影响」。
+- ZCode 没有按工作区的「启动/停止/日志」按钮；生命周期自动管理，日志在设备管理里查看。
+
+DSH 侧有两个约束：
+
+1. 原生 workspace row 没有 icon/badge 字段（`workspaceView()` 只有 path/title/sessionIds/时间），行由 `@deepseek-ai/dsh-client-ui-workspace` 渲染。插件只能按 `data-row-key="workspace:<id>"` 做幂等 DOM 装饰：替换 folder SVG、追加 device span、隐藏原生 rowActions 并注入自己的菜单。
+2. `dsh --profile headless --json` 的 `text`/`thinking` 只在 step 的 `assistant/message` 提交时写出（`dsh-headless/lib/json-stream` 的 `projectJsonRun`），本身不产生 token 增量。真正的流式需要 profile 内投影插件监听 `agent/assistant-stream`，把帧写到 stdout；本地 bridge 再把帧转成原生 `SessionAssistantStreamFrame`（`start`/`chunk`/`end`），并在 step 结束时用 durable `assistant/message` 的 `seq` 结算。
+
+DSH 的帧形状（`dsh-api-session-controller`）：
+
+```ts
+type SessionAssistantStreamFrame =
+  | { type: 'start'; attemptId: LlmAttemptId; revision: number; startedAfterSeq: number; turn: number; step: number }
+  | { type: 'chunk'; attemptId: LlmAttemptId; revision: number; index: number; time: number; chunk: JsonValue }
+  | { type: 'end'; attemptId: LlmAttemptId; revision: number; index: number;
+      outcome: { kind: 'committed'; eventType: 'assistant/message' | 'assistant/attempt'; seq: number } | { kind: 'abandoned' } }
+```
+
+`revision` 必须从 1 连续递增，`chunk.index` 是帧序号（块下标在 `chunk.index` 里），`end.index` 必须等于已发 chunk 数；`end.outcome.seq` 指向本地 `assistant/message` 的 durable seq，否则客户端会 rebaseline。
+
 ## 6. 关键源码位置
 
 | 文件 | 内容 |

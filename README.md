@@ -12,10 +12,11 @@ The remote dsh runs as a persistent systemd service (or `setsid` session) inside
 
 The Add-connection dialog is a 1:1 rebuild of ZCode's renderer components (`OVn` / `xVn` / `yVn` / `nVn` / `Smt` / `rmt` / `hmt` / `Cmt`): the same DOM structure, spacing, type scale and ZCode design tokens (light palette by default, dark palette under `body[data-ds-dark-theme]`), with device-first interaction:
 
-- saved device: click connects immediately; edit it from Settings;
-- recent workspace chips under each device open the native workspace in one click;
-- directory step: connected banner, device rename, recent paths and **Will open …**;
-- minimize is available on every step; connecting/creating continues in a ZCode-style background card.
+- the left **SSH Remote** surface only adds and manages machines;
+- workspaces are created from the main interface (**Create project** / **Add workspace**) on either This computer or a remote device;
+- saved devices connect immediately; the device menu also offers **Add remote device…**;
+- remote workspace rows show a status cloud, the project name and the device name, with a hover `...` menu for **Edit** and **Delete project**;
+- **Choose folder** on This computer opens the operating system's own folder dialog; remote devices use the 1:1 ZCode folder browser.
 
 | New connection (Settings → Remote devices) | SSH config import |
 |---|---|
@@ -27,6 +28,12 @@ The Add-connection dialog is a 1:1 rebuild of ZCode's renderer components (`OVn`
 
 The three surfaces — new connection, create project and the centered folder picker — are rebuilt from the 3.17.2 renderer with the same DOM structure, class values, type scale and copy as ZCode. The screenshots use documentation-range addresses (`192.0.2.0/24`, `203.0.113.0/24`).
 
+| Remote workspace row |
+|---|
+| ![Remote workspace row](docs/screenshot-remote-row.png) |
+
+Native-sidebar remote rows follow ZCode's `virtual-project-row`: status cloud, project name, then the muted device name. Hover reveals **New session** and the `...` menu.
+
 ## Features
 
 | Area | What it does |
@@ -34,14 +41,16 @@ The three surfaces — new connection, create project and the centered folder pi
 | Targets | SSH (password / private key / passphrase / agent / keyboard-interactive), WSL distributions on Windows (`wsl.exe --exec bash -lc`, default or named distro/user) and Docker containers (`docker exec -i ... sh -lc`, name/id/prefix, must be running) |
 | SSH hosts | TOFU host-key check; connection test with latency and remote Node detection |
 | Add connection | 1:1 ZCode device flow: wizard steps 选择设备 / 连接 / 选择目录, `已保存的设备`, `SSH config 中的 Host`, `WSL 发行版` and `运行中的容器` sections, plus `新建 SSH 连接` / `手动输入 WSL` / `手动输入 Docker`; the settings step uses ZCode's exact per-kind forms (WSL distribution datalist + Linux user hints/root warning; Docker select/manual picker); minimize is available on every step and parks the wizard in a ZCode-style background card |
-| Recent workspaces | clicking a recent path opens that native workspace directly, including from the status panel; a stopped service is started in the background |
-| Background connect | both connecting and workspace creation can continue in the background; a bottom-right pill shows progress and opens the workspace on completion, and reopening it resumes the wizard |
+| Recent workspaces | the create dialog lists existing remote workspaces under the selected device; the native row is always one click away |
+| Background connect | connecting and workspace creation can continue in the background; a bottom-right pill shows progress and opens the workspace on completion |
 | SSH config import | parses `~/.ssh/config` Host blocks and fills host, port, username and IdentityFile |
 | One-click create | the connect phase installs/reuses the shared dsh runtime; the directory step then only starts the service. Full chain: channel (SSH/WSL/Docker) → Node ≥ 22 (portable download when absent) → `@deepseek-ai/dsh` → credentials → launcher → systemd/setsid → health check |
 | Persistence | systemd `Restart=always` (system unit, or user unit + linger) or `setsid nohup` + `@reboot` cron. Survives SSH disconnect and local app exit |
-| Status monitor | running / starting / stopped / error / unreachable; PID, uptime, RSS, CPU, HTTP status, port, last check. CPU is sampled from `/proc/<pid>/stat` over 0.5 s and RSS from `/proc/<pid>/status` (no lifetime-average or fabricated values) |
-| Native workspace | each remote workspace is projected into the native sidebar; its agent is bridged to a detached remote headless session; device chips and the status panel select that same native row |
-| Lifecycle | start, stop, restart, logs (journalctl/tail), remove (service + runtime dir only; project dir kept) |
+| Status monitor | running / starting / stopped / error / unreachable; PID, uptime, RSS, CPU, HTTP status, port, last check. CPU is sampled from `/proc/<pid>/stat` and RSS from `/proc/<pid>/status` (no lifetime-average or fabricated values) |
+| Native workspace | each remote workspace is projected into the native sidebar as a ZCode-style row: cloud status glyph + project name + device name; its agent is bridged to a detached remote headless session |
+| Row menu | hover `...` on a remote row → **Edit** (rename the project and native row) or **Delete project** (remove the local projection and service, keep the remote project directory) |
+| Live streaming | the remote runner projects `agent/assistant-stream` frames over a single `tail -f` SSH channel, so reasoning and answer text appear incrementally instead of at step end |
+| Lifecycle | automatic start on create/open; no per-workspace start/stop buttons. Remove from the row menu (service + runtime dir only; project dir kept) |
 | Credentials | optionally copies local `$DSH_HOME/.credentials.yaml` (0600) into each remote workspace's own DSH home |
 | Legacy import | imports hosts from ZCode's `~/.dsh/dsh-ssh.json` on first load |
 
@@ -52,7 +61,7 @@ The local side stays a monitor and chat surface: the agent process, tools and fi
 After DeepSeek Harness has started at least once:
 
 ```powershell
-node C:workdsh-ssh-remote\bin\install.mjs --profile desktop
+node C:\work\dsh-ssh-remote\bin\install.mjs --profile desktop
 ```
 
 The script adds a `link:` dependency and the bundle to `~/.dsh/profiles/desktop/package.json`, then creates a junction in the profile's `node_modules`. Fully restart DeepSeek Harness afterwards.
@@ -66,17 +75,19 @@ Manual install: add
 to `dependencies`, append `"dsh-ssh-remote"` to `dsh.profile.bundles`, and create
 
 ```powershell
-cmd /c mklink /J "%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-ssh-remote" "C:workdsh-ssh-remote"
+cmd /c mklink /J "%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-ssh-remote" "C:\work\dsh-ssh-remote"
 ```
 
 ## Use
 
-1. **Settings → Remote devices** → add a host (host/port/user/password or key) → **Test connection** → **Save**. The wizard can also create it: **New SSH connection**.
-2. **SSH Remote** sidebar → **New remote workspace** (or Add workspace → **SSH Remote** tab). Saved devices are listed first; clicking one connects immediately. Up to three recent workspace paths appear under each device — click one to open that native workspace directly. The pencil opens the SSH form for editing.
-3. Connecting shows the SSH/runtime phases and can be sent to the background; a bottom-right pill keeps updating and opens the workspace when done. The directory step shows the connected banner, device rename, recent paths and **Will open …**.
-4. **Open workspace here** creates the service, closes the wizard and selects the new native workspace. The first create installs dsh on the host (about 1 minute, ~844 MB); later creates reuse the runtime.
-5. **Open workspace** on the status panel, a recent-path chip, or the native sidebar row all land on the same workspace. **Stop / Restart / Logs / Remove** are on the status card.
-6. Close DeepSeek Harness. The remote service keeps running. Reopen and the status panel reattaches to the same PID.
+1. **Add a machine** — open **Settings → Remote devices** or the left **SSH Remote** panel, click **New connection**, fill host/port/user/password or key, **Test connection**, **Save**. Importing `~/.ssh/config` Hosts is available in the same dialog. This panel only manages machines; it does not create workspaces.
+2. **Create a workspace from the main interface** — click **Create project** in the conversation hero, or **Add workspace** in the sidebar. Pick **This computer** or a saved remote device, type a project name, then **Choose folder**.
+   - **This computer** opens the operating system's folder dialog.
+   - A remote device opens the 1:1 ZCode folder browser (SFTP listing) after connecting.
+3. **Create** deploys/reuses the remote runtime and adds the workspace to the native sidebar. The first create installs dsh on the host (about 1 minute, ~844 MB); later creates reuse the runtime.
+4. **Remote rows** in the native sidebar show a cloud status glyph, the project name and the device name. Hover the row for **New session** and `...`; the menu offers **Edit** (rename) and **Delete project**.
+5. **Chat** runs on the remote host and streams live: reasoning and answer text arrive incrementally over one SSH tail channel; closing the local app does not stop the remote turn.
+6. **Close DeepSeek Harness.** The remote runner keeps running. Reopen; the bridge resumes from its journal and the row reattaches to the same workspace.
 
 ## Data
 
@@ -91,13 +102,16 @@ The remote Web listener binds `127.0.0.1` only; no LAN port is opened.
 - AlmaLinux 9.5, x86_64, 8 vCPU, 31 GB RAM, Node v22.23.2, systemd 252.
 - Remote install of `@deepseek-ai/dsh@0.2.1-rc.5` in ~1 minute.
 - Service prints `dsh web: ...?token=...`; an unauthenticated HTTP request without the token returns `401` (used as readiness evidence only).
-- Real metrics verified against `ps`: RSS matches `VmRSS` in `/proc/<pid>/status`; CPU is a 0.5 s `/proc/<pid>/stat` delta, not the misleading lifetime `pcpu` average.
-- Interaction chain verified end-to-end: saved-device click connects (364 ms probe) → runtime prepare hits cache → directory step → create → the new native workspace opens automatically.
-- Recent-path chip and status-panel **Open workspace** select the same native workspace; **Continue in background** keeps updating the bottom-right pill, which opens the workspace when the job completes.
-- After a workspace is removed outside the UI, the startup native projection drops the orphaned anchor row (no ghost remote project).
+- Real metrics verified against `ps`: RSS matches `VmRSS` in `/proc/<pid>/status`; CPU is a fresh `/proc/<pid>/stat` delta, not the misleading lifetime `pcpu` average.
+- Interaction chain verified end-to-end: saved-device connect → runtime prepare hits cache → folder picker → create → the new native workspace opens automatically.
+- Remote rows render the cloud glyph, project name and device name; the hover menu renames/deletes the same workspace record and native row.
+- Live streaming verified end-to-end with the real remote runner: `start` / `text-delta` / `reasoning-delta` frames reach the local bridge before the durable `assistant/message`; a long answer produced 140 live frames, and a second turn in the same session streamed normally.
+- Resume verified: dispose the local bridge while the remote turn is running, attach a new bridge to the same session id → it restarts from the journal offset, drains the remaining JSONL and appends the final message/turn end without duplicates.
+- Local **Choose folder** opens the system dialog in the desktop app; the harness also verifies the HTTP fallback when no native picker is exposed.
+- After a workspace is removed from the row menu, the native projection drops the anchor row (no ghost remote project).
 - After closing the local app for 10 s: same remote PID, uptime kept increasing, `systemctl is-active = active`.
 - Reopening the local app restored the same PID and continuous uptime.
-- Stop / start / restart, logs, and remote model listing (`loaded 2 model(s)`) all work.
+- Logs and remote model listing (`loaded 2 model(s)`) still work through the device-management routes.
 - root services log to journal, not a file under `/root`, to avoid SELinux `209/STDOUT` on RHEL-family hosts.
 - SSH/WSL/Docker share one command layer; on the development machine (no WSL optional feature, no Docker daemon) the WSL/Docker discovery and error paths were verified end-to-end in the UI (`当前系统未检测到可用的 WSL 环境` / `当前系统未检测到可用的 Docker 环境`), including the per-kind forms and badges. Full deploy inside a live WSL distribution or container still needs a host that provides one.
 
@@ -116,7 +130,7 @@ The remote Web listener binds `127.0.0.1` only; no LAN port is opened.
 ## Uninstall
 
 ```powershell
-node C:workdsh-ssh-remote\bin\uninstall.mjs --profile desktop
+node C:\work\dsh-ssh-remote\bin\uninstall.mjs --profile desktop
 ```
 
 This removes the local link/dependency selection only. Delete remote workspaces from the UI to stop their services.
