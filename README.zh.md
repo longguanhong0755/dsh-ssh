@@ -176,7 +176,7 @@ node C:workdsh-ssh-remote\bin\uninstall.mjs --profile desktop
 1. **项目名称**：留空时使用远程目录名；
 2. **设备**：**此电脑** 或已保存的远程设备；设备菜单里可以 **添加远程设备…**；
 3. **选择文件夹**：
-   - **此电脑** → 弹操作系统原生文件夹对话框（Electron 的 `__DSH_DIRECTORY_PICKER__`，浏览器下走宿主 `uiWorkspace.pickDirectory()`）；
+   - **此电脑** → 弹操作系统原生文件夹对话框（Electron 的 `__DSH_DIRECTORY_PICKER__`，浏览器下走宿主 `uiWorkspace.pickDirectory()`）；宿主没有原生选择器时回退到同款 ZCode 目录浏览弹窗；
    - **远程设备** → 先连接，再打开 1:1 ZCode 内嵌文件夹浏览器（SFTP 列表、路径输入、显示隐藏目录）；
 4. **创建项目**：部署/复用远端 runtime 并把工作区加入左侧原生列表。第一次安装 dsh（本测试环境约 1 分钟，约 844 MB），之后复用缓存。任务可继续在后台，右下角进度提示；完成后自动打开新工作区。
 

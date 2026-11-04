@@ -82,7 +82,7 @@ cmd /c mklink /J "%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-ssh-remot
 
 1. **Add a machine** — open **Settings → Remote devices** or the left **SSH Remote** panel, click **New connection**, fill host/port/user/password or key, **Test connection**, **Save**. Importing `~/.ssh/config` Hosts is available in the same dialog. This panel only manages machines; it does not create workspaces.
 2. **Create a workspace from the main interface** — click **Create project** in the conversation hero, or **Add workspace** in the sidebar. Pick **This computer** or a saved remote device, type a project name, then **Choose folder**.
-   - **This computer** opens the operating system's folder dialog.
+   - **This computer** opens the operating system's folder dialog (falling back to the same ZCode folder dialog when the host has no native chooser).
    - A remote device opens the 1:1 ZCode folder browser (SFTP listing) after connecting.
 3. **Create** deploys/reuses the remote runtime and adds the workspace to the native sidebar. The first create installs dsh on the host (about 1 minute, ~844 MB); later creates reuse the runtime.
 4. **Remote rows** in the native sidebar show a cloud status glyph, the project name and the device name. Hover the row for **New session** and `...`; the menu offers **Edit** (rename) and **Delete project**.

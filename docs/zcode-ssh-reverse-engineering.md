@@ -378,6 +378,81 @@ type SessionAssistantStreamFrame =
 
 `revision` 必须从 1 连续递增，`chunk.index` 是帧序号（块下标在 `chunk.index` 里），`end.index` 必须等于已发 chunk 数；`end.outcome.seq` 指向本地 `assistant/message` 的 durable seq，否则客户端会 rebaseline。
 
+### 5.3 3.17.2 源码级还原（2026-11 安装版）
+
+本次直接从未打包的渲染层源码（`out/renderer/assets/styles-n-UNIiNg.js`，含 JSX 与组件定义）和编译后的 `styles-CDRCIIoN.css` 取值，不再依赖截图推断。
+
+**项目行 `virtual-project-row`（`ProjectRowItem`）**
+
+```jsx
+<div data-testid="virtual-project-row" tabIndex={0}
+     className="group/project-row ml-2 flex h-8 min-w-0 items-center gap-1 rounded-lg pr-1 hover:bg-surface-hover">
+  <span className="flex min-w-0 flex-1 shrink-0">
+    <button data-testid="virtual-project-toggle"
+            className="... flex h-8 min-w-0 flex-1 justify-start gap-2 rounded-lg pl-2.5 pr-1 ...">
+      <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
+        {/* remote: <Aj presentation={status} project />, local: folder icon */}
+      </span>
+      <span className="flex min-w-0 items-baseline gap-2">
+        <span className="truncate text-ui-base text-foreground-subtle">{project.name}</span>
+        <span data-testid="project-device"
+              className="max-w-24 truncate text-ui-sm text-remote-foreground-muted">{deviceName}</span>
+      </span>
+      {/* 非 online 时追加 <span data-testid="project-status-label" class="text-ui-sm ...">离线/连接中</span> */}
+    </button>
+  </span>
+  <div data-testid="virtual-project-actions"
+       className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity
+                  group-hover/project-row:opacity-100 group-focus-within/project-row:opacity-100
+                  [&:has([data-state=open])]:opacity-100 [@media(hover:none)]:opacity-100">
+    ...menu（MoreHorizontal）→ 设备设置/编辑/置顶/删除/移除条目
+    ...files（仅多根目录时下拉，否则直接打开文件树）
+    ...create-task（仅在 online 时渲染）
+  </div>
+</div>
+```
+
+关键取值（浅色 / 深色）：
+
+| 元素 | 类 | 计算值 |
+|---|---|---|
+| 行 | `h-8` `gap-1` `rounded-lg` `ml-2` `pr-1` | 32px 高、4px 间距、8px 圆角、左外 8px、右内 4px |
+| 图标位 | `size-4` | 16×16，图标 16px |
+| 名称 | `text-ui-base text-foreground-subtle` | 14px / `#40404099`（60% 透明）→ 白底约 `#8c8c8c` |
+| 设备 | `text-ui-sm text-remote-foreground-muted` `max-w-24` | 12px / `#595959`（深色 `#b3b3b3`），最宽 96px |
+| 图标色（online） | `text-remote-foreground-muted` | `#595959` / `#b3b3b3`，**不是蓝色** |
+| 图标色（connecting） | `text-progress-surface-foreground` | 蓝色 + `animate-spin` |
+| 图标色（failed） | `text-destructive` | 红色 `cloud-x`（云 + 右下角 x） |
+| 操作区 | `gap-1` `opacity-0` → hover `opacity-100` | 4px 间距，悬停淡入（不是 display 切换） |
+| 操作按钮 | `size: icon-sm` + 图标 `size-3.5` | 24×24 按钮、14px 图标 |
+
+`text-ui-base` 来自 `--ui-font-size:14px`；`--spacing:.25rem`。
+
+**状态模型（`tA`）**：`online → cloud`；`bootstrapping/retrying/connecting/updating → spinner`；`needs-install/needs-upgrade/needs-identity/pending → cloud-alert`；`failed/error → cloud-x`；其余 → `cloud-off`。在线项目行的云朵强制 `text-remote-foreground-muted`。
+
+**设备行（连接向导「已保存的设备」，`e7`）**
+
+```jsx
+<button class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-hover">
+  <span class="flex size-8 shrink-0 items-center justify-center rounded-md bg-surface text-remote-foreground-muted">
+    {/* ssh: cloud / wsl: monitor / docker: box */}
+  </span>
+  <span class="min-w-0 flex-1">
+    <span class="block truncate text-ui-base font-medium">{displayName}</span>
+    <span class="block break-all font-mono text-ui-sm text-remote-foreground-muted">{target}</span>
+  </span>
+  {/* 状态徽标：h-6 rounded-md border px-2 text-ui-xs font-semibold + 6px 圆点 */}
+</button>
+```
+
+状态徽标文案（`remote.status.*`）：`已连接` / `未连接` / `连接中`。
+
+**设置页「远程设备」文案**：标题 `远程设备`；说明 `管理已连接的服务器、WSL 发行版和 Docker 容器。`；分组标题 `设备`；空态 `还没有远程设备连接。`；操作 `编辑` / `移除连接` / `设为默认连接`；时间 `上次成功 {time}`、`最近在线 {time}`。
+
+**行菜单文案**：`新建任务`、`查看文件`、`远程设备设置`、`编辑项目`、`删除项目`。
+
+> 旧版本（`styles-Dv5E6Odo.js`）的结论仍然成立，但颜色值以 3.17.2 安装版为准：项目名是 subtle 灰、设备名是 remote muted 灰、云朵 online 是 muted 灰而不是品牌蓝。
+
 ## 6. 关键源码位置
 
 | 文件 | 内容 |
@@ -390,6 +465,6 @@ type SessionAssistantStreamFrame =
 | `out/main/chunk-EWG2DB7O.js`（3.17.2） | 远程资产、tar 打包/解包、wrapper、版本/SHA 校验、`assetInstallMode` |
 | `out/main/index.js` | `RemoteWorkspaceSession`、连接/绑定/释放、窗口重挂 |
 | `out/host/index.js` | 远程会话消息处理、SSH backend 选择、remote workspace service |
-| `out/renderer/assets/styles-Dv5E6Odo.js`（3.17.2） | 渲染层主 bundle：`FGn`/`PGn`/`OGn`/`fyt`/`Kvt`/`Jyt`/`jI`/`fI` 等连接与项目组件 |
-| `out/renderer/assets/styles-NK68EN_n.css`（3.17.2） | 实际 Tailwind 产物：`--ui-font-size:14px`、`--container-xl:36rem`、颜色/圆角/间距令牌 |
-| `out/renderer/assets/IntlProvider-4oW73Zh8.js`（3.17.2） | `remote.*` / `ssh.*` / `project.*` / `directoryBrowser.*` 交互文案 |
+| `out/renderer/assets/styles-n-UNIiNg.js`（3.17.2 安装版） | 渲染层主 bundle（含未拆分的 JSX 源码）：`ProjectRowItem`/`virtual-project-row`、`Aj` 云朵、`tA` 状态映射、`e7` 设备行、`zYn` 远程设备设置页、`$P` 项目编辑器、`FP` 目录浏览器 |
+| `out/renderer/assets/styles-CDRCIIoN.css`（3.17.2 安装版） | 实际 Tailwind 产物：`--ui-font-size:14px`、`--spacing:.25rem`、`--color-remote-foreground-muted`、`--color-foreground-subtle`、`--color-surface-hover` 等令牌 |
+| `out/renderer/assets/IntlProvider-C2IbGUkl.js`（3.17.2 安装版） | `remote.*` / `ssh.*` / `project.*` / `settings.source.*` / `directoryBrowser.*` 交互文案 |
