@@ -2,7 +2,7 @@
 
 **ZCode-style remote workspaces for DeepSeek Harness (dsh): SSH, WSL and Docker.**
 
-The remote dsh runs as a persistent systemd service (or `setsid` session) inside the SSH host, WSL distribution or Docker container, and remote sessions are executed by a detached `dsh --profile headless` runner there. The local app selects the workspace, shows the native chat, and monitors status; there is no local console proxy. Closing the local app does **not** stop the remote dsh.
+The remote dsh runs as a persistent systemd service (or `setsid` session) inside the SSH host, WSL distribution or Docker container, and remote sessions are executed by a detached, persistent `dsh --profile sdk` process there (falling back to `--profile headless` when unavailable). The local app selects the workspace, shows the native chat, and monitors status; there is no local console proxy. Closing the local app does **not** stop the remote dsh.
 
 > Target: DeepSeek Harness Desktop `0.2.1-rc.5`. Validated end-to-end against `203.0.113.10` (AlmaLinux 9.5).
 
@@ -47,10 +47,11 @@ Native-sidebar remote rows follow ZCode's `virtual-project-row`: status cloud, p
 | One-click create | the connect phase installs/reuses the shared dsh runtime; the directory step then only starts the service. Full chain: channel (SSH/WSL/Docker) → Node ≥ 22 (portable download when absent) → `@deepseek-ai/dsh` → credentials → launcher → systemd/setsid → health check |
 | Persistence | systemd `Restart=always` (system unit, or user unit + linger) or `setsid nohup` + `@reboot` cron. Survives SSH disconnect and local app exit |
 | Status monitor | running / starting / stopped / error / unreachable; PID, uptime, RSS, CPU, HTTP status, port, last check. CPU is sampled from `/proc/<pid>/stat` and RSS from `/proc/<pid>/status` (no lifetime-average or fabricated values) |
-| Native workspace | each remote workspace is projected into the native sidebar as a ZCode-style row: cloud status glyph + project name + device name; its agent is bridged to a detached remote headless session |
+| Native workspace | each remote workspace is projected into the native sidebar as a ZCode-style row: cloud status glyph + project name + device name; its agent is bridged to a detached, persistent remote SDK session |
 | Row menu | hover `...` on a remote row → **Edit** (rename the project and native row) or **Delete project** (remove the local projection and service, keep the remote project directory) |
 | Live streaming | the remote runner projects `agent/assistant-stream` frames over a single `tail -f` SSH channel, so reasoning and answer text appear incrementally instead of at step end |
-| Warm runner | while a remote workspace is idle, the bridge pre-boots the next turn's headless runner and feeds it the prompt over a FIFO. The next message skips the 4-5 s process startup: measured `step/start` 0.20 s and first text 0.7 s after send, versus 4.96 s / 5.40 s cold. At most two runners are kept (~200 MB RSS each on the target), refreshed every 5 min and bounded by a TTL. `DSH_SSH_NO_PREWARM=1` disables it; `DSH_SSH_MAX_WARM` changes the cap |
+| Persistent runner | one detached `dsh --profile sdk` JSON-RPC process per session, fed over a FIFO and streaming events through one tail channel. The first prompt pays a ~3 s boot; every later prompt reaches `step/start` in ~0.15 s and first text in ~1.0-1.3 s. Session context, tool calls and cancel all run in the same process. Idle runtimes are reaped after 30 min (`DSH_SSH_SDK_TTL`); a local restart reattaches the live runtime from the journal offset. `DSH_SSH_NO_SDK=1` disables it; `DSH_SSH_SDK_PROVIDER` / `DSH_SSH_SDK_MODEL` override the remote model |
+| Warm fallback | if the SDK profile cannot start (older remote build, unsupported host), the bridge falls back to `dsh --profile headless --json` with the prewarmed FIFO runner: measured `step/start` 0.20 s / first text 0.7 s when warm, 4.96 s / 5.40 s cold. At most two runners (~200 MB RSS each), refreshed every 5 min and bounded by a TTL. `DSH_SSH_NO_PREWARM=1` disables prewarming; `DSH_SSH_MAX_WARM` changes the cap |
 | Lifecycle | automatic start on create/open; no per-workspace start/stop buttons. Remove from the row menu (service + runtime dir only; project dir kept) |
 | Credentials | optionally copies local `$DSH_HOME/.credentials.yaml` (0600) into each remote workspace's own DSH home |
 | Legacy import | imports hosts from ZCode's `~/.dsh/dsh-ssh.json` on first load |
@@ -87,7 +88,7 @@ cmd /c mklink /J "%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-ssh-remot
    - A remote device opens the 1:1 ZCode folder browser (SFTP listing) after connecting.
 3. **Create** deploys/reuses the remote runtime and adds the workspace to the native sidebar. The first create installs dsh on the host (about 1 minute, ~844 MB); later creates reuse the runtime.
 4. **Remote rows** in the native sidebar show a cloud status glyph, the project name and the device name. Hover the row for **New session** and `...`; the menu offers **Edit** (rename) and **Delete project**.
-5. **Chat** runs on the remote host and streams live: reasoning and answer text arrive incrementally over one SSH tail channel; the next turn's runner is already booted, so the first token appears in well under a second. Closing the local app does not stop the remote turn.
+5. **Chat** runs on the remote host and streams live: reasoning and answer text arrive incrementally over one SSH tail channel; the next turn reuses the already running remote runtime, so the first token appears in about a second. Closing the local app does not stop the remote turn.
 6. **Close DeepSeek Harness.** The remote runner keeps running. Reopen; the bridge resumes from its journal and the row reattaches to the same workspace.
 
 ## Data
@@ -107,7 +108,11 @@ The remote Web listener binds `127.0.0.1` only; no LAN port is opened.
 - Interaction chain verified end-to-end: saved-device connect → runtime prepare hits cache → folder picker → create → the new native workspace opens automatically.
 - Remote rows render the cloud glyph, project name and device name; the hover menu renames/deletes the same workspace record and native row.
 - Live streaming verified end-to-end with the real remote runner: `start` / `text-delta` / `reasoning-delta` frames reach the local bridge before the durable `assistant/message`; a long answer produced 140 live frames, and a second turn in the same session streamed normally.
-- Warm runner measured against the same host: cold launch `step/start` 4.96 s and first text 5.40 s after send; prewarmed launch `step/start` 0.20 s and first text 0.7 s; a follow-up sent the instant the previous turn ended still takes the cold path (~3.3 s) because the next runner boots only after the previous process exits, but the session transcript is complete (`我上一条消息说了什么` returned the exact prior text). Runners also set Node's `NODE_COMPILE_CACHE` inside the workspace DSH home, which trimmed cold boots by ~0.5 s.
+- Persistent runner verified end-to-end: the first turn paid one ~3 s SDK boot, an immediate second turn reached `step/start` 148 ms after send (first text 1.02 s), and a follow-up asking for a previously given number returned it from the live session. Tool calls streamed through the same runtime; cancel ended a turn in ~2.8 s with no ghost output, and a later turn booted and resumed cleanly.
+- Local restart verified both ways: disposing the bridge mid-turn and reattaching consumed the rest of the turn from the journal offset (one assistant message, 554 chars, no duplicates); disposing while idle and reattaching reused the live runtime (363 ms to reattach) and answered the follow-up with exactly one message.
+- TTL watchdog verified with a 30 s TTL: the idle runtime was reaped between turns, the next prompt booted a fresh one, resumed the session, and answered correctly; replaced watchdogs now reap their whole process group (no leaked `sleep` children).
+- SDK failure fallback verified: forcing an invalid provider made the SDK boot fail, and both turns still completed through the headless warm path.
+- Headless warm fallback measured against the same host: cold launch `step/start` 4.96 s and first text 5.40 s after send; prewarmed launch `step/start` 0.20 s and first text 0.7 s; a follow-up sent the instant the previous turn ended still takes the cold path (~3.3 s) because the next runner boots only after the previous process exits. Runners also set Node's `NODE_COMPILE_CACHE` inside the workspace DSH home, which trimmed cold boots by ~0.5 s.
 - Resume verified: dispose the local bridge while the remote turn is running, attach a new bridge to the same session id → it restarts from the journal offset, drains the remaining JSONL and appends the final message/turn end without duplicates.
 - Local **Choose folder** opens the system dialog in the desktop app; the harness also verifies the HTTP fallback when no native picker is exposed.
 - After a workspace is removed from the row menu, the native projection drops the anchor row (no ghost remote project).
@@ -122,8 +127,8 @@ The remote Web listener binds `127.0.0.1` only; no LAN port is opened.
 - Linux remotes only: WSL distributions and Docker containers must provide a Linux `bash`/`sh`, Node ≥ 22 or a way to download the portable runtime (curl, wget or an existing Node).
 - WSL requires a Windows desktop with the WSL optional feature installed; Docker requires a running daemon and a running container.
 - The remote host needs access to an npm registry (default npmmirror).
-- A prompt sent the instant the previous turn ends still pays one cold runner start (~3 s). The warm runner cannot boot earlier because it must load the session after the previous process has written the finished turn; normal typing pauses hit the warm path. Targets without `mkfifo` (some minimal containers) fall back to cold starts automatically.
-- Credentials are synced, but local model selection/settings are not yet mapped to the remote headless runner.
+- The first prompt in a session pays one remote runtime boot (~3 s), and an idle runtime is reaped after 30 min, so the next prompt boots again. A local restart reuses a live runtime, or resumes a fresh one from the remote session store. Hosts where the SDK profile cannot start fall back to the headless warm runner; there an immediate follow-up still pays ~3 s. Targets without `mkfifo` (some minimal containers) fall back to cold starts automatically.
+- Credentials are synced, but local model selection/settings are not yet mapped to the remote runner; it defaults to `deepseek-official` / `deepseek-chat`, overridable with `DSH_SSH_SDK_PROVIDER` / `DSH_SSH_SDK_MODEL`.
 - Background connect progress is in-memory: restarting the local app drops the pill (created workspaces are restored from `state.json`); there is no cancel button for an in-flight install/create.
 - No local mirror of remote project files; the agent and tools run inside the target.
 - Docker workspaces do not survive removal of their container; WSL workspaces survive until the distribution is terminated/unregistered.

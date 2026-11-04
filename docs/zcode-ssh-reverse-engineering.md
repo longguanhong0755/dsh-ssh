@@ -378,7 +378,9 @@ type SessionAssistantStreamFrame =
 
 `revision` 必须从 1 连续递增，`chunk.index` 是帧序号（块下标在 `chunk.index` 里），`end.index` 必须等于已发 chunk 数；`end.outcome.seq` 指向本地 `assistant/message` 的 durable seq，否则客户端会 rebaseline。
 
-冷启动余量：headless 进程启动到能接收任务需要 4~5 秒（`dsh --version` 仅 126 ms，成本在 profile/插件初始化）。`bin.js` 支持用 `-` 从 stdin 读任务，因此 bridge 在空闲时预先启动下一轮进程，用一个 FIFO 保持 stdin 打开，发送时写入 prompt 再杀掉持有者触发 EOF；实测 `step/start` 从 4.96 s 降到 0.20 s，首段文本从 5.40 s 降到 0.7 s。预热进程必须等上一轮进程退出后再启动，才能载入包含上一轮结果的会话快照；因此「上一轮刚结束就追发」仍是冷启动（约 3.3 s）。无人发送时持有者按 TTL 退出，runner 得到 EOF 后以 `a task is required` 干净退出，不写入会话。两条路径都设置 `NODE_COMPILE_CACHE`（指向工作区 DSH home），冷启动实测再省约 0.5 秒；预热最多保留 2 个（每个约 200 MB RSS），按最近使用淘汰。
+常驻 SDK runner（0.3.0 起默认）：`dsh --profile sdk` 由 `@deepseek-ai/dsh-sdk-app` 的 `dsh-sdk-jsonrpc-server` 提供 stdio JSON-RPC：`initialize {cwd, provider, model}` → `session/prompt {sessionId, contentBlocks}`，事件以 `session.event` 通知返回（`turn/start`、`step/start`、`assistant/message`、`tool/call`、`tool/result`、`step/end`、`turn/end`）。bridge 用 FIFO 作为 stdin（`exec 3<>in.fifo`，node `<&3`），stdout 追加到 `out.jsonl`；本地用一条 tail 通道按行读取，把 JSON-RPC 响应、通知和流式投影插件的 `{type:'stream',frame}` 行分流。首个 prompt 付一次进程启动（实测约 2.5~3 秒），之后零间隔追问 `step/start` 148 毫秒、首段文本 1.02 秒，上下文与工具调用都留在同一进程。每次 prompt 刷新 watchdog，空闲 TTL（默认 1800 秒）后按进程组 `kill -TERM -pid`；本机重启按 journal 的 `active.mode='sdk'` 和字节偏移直接重连存活进程，进程已死则重启并 `session/resume`。SDK profile 必须显式设置 `DSH_PERMISSION_MODE=danger-full-access`（默认 `workspace-write` 在没有 bubblewrap/Landlock 的宿主上会让工具执行失败）。SDK 初始化失败或流通道打不开时回退到下面的 headless 路径。
+
+回退：headless 预热 runner。headless 进程启动到能接收任务需要 4~5 秒（`dsh --version` 仅 126 ms，成本在 profile/插件初始化）。`bin.js` 支持用 `-` 从 stdin 读任务，因此 bridge 在空闲时预先启动下一轮进程，用一个 FIFO 保持 stdin 打开，发送时写入 prompt 再杀掉持有者触发 EOF；实测 `step/start` 从 4.96 s 降到 0.20 s，首段文本从 5.40 s 降到 0.7 s。预热进程必须等上一轮进程退出后再启动，才能载入包含上一轮结果的会话快照；因此「上一轮刚结束就追发」仍是冷启动（约 3.3 s）。无人发送时持有者按 TTL 退出，runner 得到 EOF 后以 `a task is required` 干净退出，不写入会话。headless 路径同样设置 `NODE_COMPILE_CACHE`（指向工作区 DSH home），冷启动实测再省约 0.5 秒；预热最多保留 2 个（每个约 200 MB RSS），按最近使用淘汰。
 
 ### 5.3 3.17.2 源码级还原（2026-11 安装版）
 
