@@ -192,4 +192,8 @@ See [`docs/zcode-ssh-reverse-engineering.md`](docs/zcode-ssh-reverse-engineering
 
 MIT
 
+## Community
+
+This open-source project is linked to and recognized by the [LINUX DO](https://linux.do/) community.
+
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)

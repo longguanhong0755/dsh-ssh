@@ -341,4 +341,8 @@ $DSH_HOME/ssh-remote/
 
 MIT
 
+## 社区
+
+本开源项目已链接并认可 [LINUX DO](https://linux.do/) 社区。
+
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
