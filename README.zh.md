@@ -260,7 +260,7 @@ $DSH_HOME/ssh-remote/
   - 真实指标核对：RSS 与 `ps -o rss`/`VmRSS` 一致
   - 关闭本地 dsh 10 秒后：远程 PID 不变、uptime 持续增长、`systemctl is-active = active`
   - 重新打开本地 dsh：bridge 从 journal 续读，同一个 PID、uptime 连续
-  - 流式实测：真实远端 runner 产生 `start` / `reasoning-delta` / `text-delta` 帧，长回答共 140 帧；第二回合同一会话继续流式；取消时收到 abandoned end + `turn/end cancelled`
+  - 流式实测：真实远端 runner 产生 `start` / `reasoning-delta` / `text-delta` 帧。渲染端对每个 agent 只认一条严格递增的 `revision`，所以 bridge 递增 agent 自己的 `assistantStreamRevision`，不再每个 attempt 从 1 重来。实测 587 字的回答按 `16 → 26 → 56 → 68 → 95 → 138 → 199 → 328 → 406 → 458 → 587` 增长（约 1.9 秒），并在半句处截到中途截图；该轮 897 帧全部被全局探针收到（累计 1687），跨轮 revision 连续（`1247 → 1687 → 2584`）。取消时仍收到 abandoned end + `turn/end cancelled`
   - 常驻 runner 实测：首轮付一次约 3 秒 SDK 启动；零间隔追问 `step/start` 148 毫秒、首段文本 1.02 秒；询问上一轮记住的数字能原样返回（7391）；工具调用在同一进程内流式完成；取消后 2.8 秒内收到 `turn/end cancelled`，无残留输出，下一轮可正常重启并恢复
   - 本机重启实测：会话进行中销毁 bridge，再挂载同一 session → 从 journal offset 补齐剩余事件（1 条最终消息、554 字、无重复）；空闲时销毁再挂载 → 直接复用存活进程（363 毫秒完成重连），追问只产生 1 条消息
   - TTL 实测：30 秒 TTL 下空闲进程在两轮之间被 watchdog 回收，下一轮自动重启并 `session/resume`，回答正确；替换 watchdog 时会回收整个进程组，不再泄漏 `sleep` 子进程
