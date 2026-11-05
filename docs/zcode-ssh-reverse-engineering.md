@@ -207,6 +207,16 @@ rea analyze-javascript-application "%LOCALAPPDATA%/Programs/ZCode/resources/app_
     空态为 `min-h-32` 虚线框 + 36px 圆形 folder-plus 图标 + 标题 + 提示。
     离线设备标题为 `连接并选择文件夹`，提示 `设备当前{status}，点击后先连接`。
   - 页脚：取消 + 创建项目（本地/远程都要求恰好 1 个根目录；远程根目录多于/少于 1 时禁用）。
+- 保存前确认（`hyt` @styles-Dv5E6Odo.js，testid `project-folder-trust-dialog`）：
+  - 由 `jI` 的保存回调触发，覆盖在创建项目弹窗之上，不是独立路由；
+  - 结构：标题 `project.trustFolderTitle`（单根目录）或 `project.trustFoldersTitle`（多根目录）→
+    设备标签（`project.thisComputer` 或设备名）→ 等宽路径列表（`text-xs font-mono`，超高滚动）→
+    说明 `project.trustFoldersDescription` → 页脚两个按钮；
+  - 按钮：`取消`（secondary）与 `信任文件夹并创建`（default，`project.trustFoldersAndCreate`）；
+  - 语义：`取消` 只关闭确认层，回到创建项目表单，不会退出创建流程；单根目录与多根目录共用同一组件，
+    仅标题键不同。
+- 项目名：宿主取 `name.trim() || folderBasename || defaultName || 'New project'`，
+  因此留空时以所选目录的 basename 命名（远程目录与本地目录一致）。
 
 ### 2.5.3 选择文件夹
 
@@ -363,7 +373,8 @@ ZCode 的项目行（`styles-Dv5E6Odo.js` 的 `virtual-project-row`）是「图�
 
 DSH 侧有两个约束：
 
-1. 原生 workspace row 没有 icon/badge 字段（`workspaceView()` 只有 path/title/sessionIds/时间），行由 `@deepseek-ai/dsh-client-ui-workspace` 渲染。插件只能按 `data-row-key="workspace:<id>"` 做幂等 DOM 装饰：替换 folder SVG、追加 device span、隐藏原生 rowActions 并注入自己的菜单。
+1. 原生 workspace row 没有 icon/badge 字段（`workspaceView()` 只有 path/title/sessionIds/时间），行由 `@deepseek-ai/dsh-client-ui-workspace` 渲染。插件只能按 `data-row-key="workspace:<id>"` 做幂等 DOM 装饰：隐藏原生 folder SVG（CSS）、追加自己的云朵 SVG 与 device span、隐藏原生 rowActions 并注入自己的菜单。
+   **不要对 React 管理的节点做 `replaceWith`/`remove`**：宿主下一次 commit 的 `removeChild` 会抛 `NotFoundError`，整个 `sidebar.workspaces` slot 会以 `data-slot-error` 崩溃，原生工作区列表全部消失。只允许两种操作：追加插件自己的节点，或用 CSS 隐藏宿主节点。插件节点用 `data-dsh-ssh-*` 标记，重渲染后按标记补回。
 2. `dsh --profile headless --json` 的 `text`/`thinking` 只在 step 的 `assistant/message` 提交时写出（`dsh-headless/lib/json-stream` 的 `projectJsonRun`），本身不产生 token 增量。真正的流式需要 profile 内投影插件监听 `agent/assistant-stream`，把帧写到 stdout；本地 bridge 再把帧转成原生 `SessionAssistantStreamFrame`（`start`/`chunk`/`end`），并在 step 结束时用 durable `assistant/message` 的 `seq` 结算。
 
 DSH 的帧形状（`dsh-api-session-controller`）：

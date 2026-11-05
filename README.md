@@ -86,10 +86,11 @@ cmd /c mklink /J "%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-ssh-remot
 2. **Create a workspace from the main interface** — click **Create project** in the conversation hero, or **Add workspace** in the sidebar. Pick **This computer** or a saved remote device, type a project name, then **Choose folder**.
    - **This computer** opens the operating system's folder dialog (falling back to the same ZCode folder dialog when the host has no native chooser).
    - A remote device opens the 1:1 ZCode folder browser (SFTP listing) after connecting.
-3. **Create** deploys/reuses the remote runtime and adds the workspace to the native sidebar. The first create installs dsh on the host (about 1 minute, ~844 MB); later creates reuse the runtime.
-4. **Remote rows** in the native sidebar show a cloud status glyph, the project name and the device name. Hover the row for **New session** and `...`; the menu offers **Edit** (rename) and **Delete project**.
-5. **Chat** runs on the remote host and streams live: reasoning and answer text arrive incrementally over one SSH tail channel; the next turn reuses the already running remote runtime, so the first token appears in about a second. Closing the local app does not stop the remote turn.
-6. **Close DeepSeek Harness.** The remote runner keeps running. Reopen; the bridge resumes from its journal and the row reattaches to the same workspace.
+3. **Trust this folder?** — **Create project** first opens ZCode's folder-trust confirmation (device name, monospace path list, permission description). **Trust folders and create** starts the deploy; **Cancel** returns to the form without closing the dialog.
+4. **Create** deploys/reuses the remote runtime and adds the workspace to the native sidebar. The first create installs dsh on the host (about 1 minute, ~844 MB); later creates reuse the runtime. An empty project name falls back to the selected folder's basename, as in ZCode.
+5. **Remote rows** in the native sidebar show a cloud status glyph, the project name and the device name. Hover the row for **New session** and `...`; the menu offers **Edit** (rename) and **Delete project**.
+6. **Chat** runs on the remote host and streams live: reasoning and answer text arrive incrementally over one SSH tail channel; the next turn reuses the already running remote runtime, so the first token appears in about a second. Closing the local app does not stop the remote turn.
+7. **Close DeepSeek Harness.** The remote runner keeps running. Reopen; the bridge resumes from its journal and the row reattaches to the same workspace.
 
 ## Data
 
@@ -105,7 +106,9 @@ The remote Web listener binds `127.0.0.1` only; no LAN port is opened.
 - Remote install of `@deepseek-ai/dsh@0.2.1-rc.5` in ~1 minute.
 - Service prints `dsh web: ...?token=...`; an unauthenticated HTTP request without the token returns `401` (used as readiness evidence only).
 - Real metrics verified against `ps`: RSS matches `VmRSS` in `/proc/<pid>/status`; CPU is a fresh `/proc/<pid>/stat` delta, not the misleading lifetime `pcpu` average.
-- Interaction chain verified end-to-end: saved-device connect → runtime prepare hits cache → folder picker → create → the new native workspace opens automatically.
+- Interaction chain verified end-to-end: saved-device connect → runtime prepare hits cache → folder picker → trust confirmation → create → the new native workspace opens automatically.
+- Folder-trust dialog verified: **Cancel** closes only the confirmation and keeps the form and chosen root; **Trust folders and create** completes the job and registers the native workspace.
+- macOS simulation verified by rewriting `/ssh-remote/discover`'s `platform` to `darwin`: the panel subtitle, connection-type segment, device list and **Enter WSL manually** all disappear.
 - Remote rows render the cloud glyph, project name and device name; the hover menu renames/deletes the same workspace record and native row.
 - Live streaming verified end-to-end with the real remote runner: `start` / `text-delta` / `reasoning-delta` frames reach the local bridge before the durable `assistant/message`; a long answer produced 140 live frames, and a second turn in the same session streamed normally.
 - Persistent runner verified end-to-end: the first turn paid one ~3 s SDK boot, an immediate second turn reached `step/start` 148 ms after send (first text 1.02 s), and a follow-up asking for a previously given number returned it from the live session. Tool calls streamed through the same runtime; cancel ended a turn in ~2.8 s with no ghost output, and a later turn booted and resumed cleanly.
@@ -126,6 +129,7 @@ The remote Web listener binds `127.0.0.1` only; no LAN port is opened.
 
 - Linux remotes only: WSL distributions and Docker containers must provide a Linux `bash`/`sh`, Node ≥ 22 or a way to download the portable runtime (curl, wget or an existing Node).
 - WSL requires a Windows desktop with the WSL optional feature installed; Docker requires a running daemon and a running container.
+- macOS has no WSL, matching ZCode: the backend rejects WSL targets and the UI renders no WSL entry at all (panel subtitle, connection-type segment, device list, **Enter WSL manually**). Platform comes from the DSH backend's `process.platform`, not the browser UA.
 - The remote host needs access to an npm registry (default npmmirror).
 - The first prompt in a session pays one remote runtime boot (~3 s), and an idle runtime is reaped after 30 min, so the next prompt boots again. A local restart reuses a live runtime, or resumes a fresh one from the remote session store. Hosts where the SDK profile cannot start fall back to the headless warm runner; there an immediate follow-up still pays ~3 s. Targets without `mkfifo` (some minimal containers) fall back to cold starts automatically.
 - Credentials are synced, but local model selection/settings are not yet mapped to the remote runner; it defaults to `deepseek-official` / `deepseek-chat`, overridable with `DSH_SSH_SDK_PROVIDER` / `DSH_SSH_SDK_MODEL`.
