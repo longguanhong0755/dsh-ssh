@@ -29,11 +29,16 @@
     "LICENSE"
   ],
   "keywords": [
-    "deepseek-harness",
-    "dsh",
     "dsh-plugin",
+    "deepseek-harness",
+    "deepseek",
+    "dsh",
     "ssh",
-    "remote-workspace"
+    "ssh-remote",
+    "remote-workspace",
+    "wsl",
+    "docker",
+    "remote-development"
   ],
   "dsh": {
     "bundle": {
