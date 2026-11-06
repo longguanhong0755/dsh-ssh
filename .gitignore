@@ -3,9 +3,18 @@ node_modules/
 *.log
 
 # Local runtime state (hosts, workspaces, passwords, TOFU fingerprints)
-state.json
+state.json*
 known_hosts.json
-bridge.json
+bridge.json*
+
+# Local secrets and proprietary analysis notes
+.env
+.env.*
+*.pem
+*.key
+analysis/
+.zcode/
+coverage/
 
 .DS_Store
 Thumbs.db

@@ -81,7 +81,13 @@ Answers are generated remotely and appear word by word locally, just like a loca
 
 After DeepSeek Harness has started at least once:
 
+```bash
+# macOS / Linux / WSL
+node <plugin-dir>/bin/install.mjs --profile desktop
+```
+
 ```powershell
+# Windows
 node <plugin-dir>\bin\install.mjs --profile desktop
 ```
 
@@ -104,7 +110,7 @@ The **SSH Remote** panel only manages devices; workspaces are created from the m
 
 ## Data and security
 
-- Devices and settings live in the local `$DSH_HOME/ssh-remote/state.json` (mode 0600) and are never written to the remote;
+- Devices and settings live in the local `$DSH_HOME/ssh-remote/state.json` (mode 0600 on POSIX; on Windows it inherits the user-profile ACL) and are never written to the remote;
 - The remote dsh listens on `127.0.0.1` only; no LAN port is exposed;
 - Host keys are recorded on first connect and later changes are rejected;
 - Local model credentials can optionally be synced to the remote workspace with mode 0600.

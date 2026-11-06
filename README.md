@@ -81,7 +81,13 @@ SSH / WSL / Docker 三类统一入口，支持从 `~/.ssh/config` 导入。macOS
 
 在 DeepSeek Harness 至少启动过一次之后：
 
+```bash
+# macOS / Linux / WSL
+node <插件目录>/bin/install.mjs --profile desktop
+```
+
 ```powershell
+# Windows
 node <插件目录>\bin\install.mjs --profile desktop
 ```
 
@@ -104,7 +110,7 @@ node <插件目录>\bin\install.mjs --profile desktop
 
 ## 数据与安全
 
-- 设备与设置保存在本机 `$DSH_HOME/ssh-remote/state.json`（0600），不写入远程；
+- 设备与设置保存在本机 `$DSH_HOME/ssh-remote/state.json`（POSIX 上为 0600；Windows 依赖用户配置目录的 ACL），不写入远程；
 - 远程 dsh 只监听 `127.0.0.1`，不向局域网暴露端口；
 - 首次连接记录主机指纹，之后指纹变化会拒绝连接；
 - 可选把本机模型凭证以 0600 同步到远程工作区。

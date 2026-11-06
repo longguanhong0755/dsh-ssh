@@ -1,8 +1,9 @@
 {
   "name": "dsh-ssh-remote",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "ZCode-style SSH remote workspaces for DeepSeek Harness: deploy and supervise a persistent dsh runtime on an SSH host, project it into the native workspace list, and reopen recent remote directories in one click.",
   "license": "MIT",
+  "author": "longguanhong0755",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/longguanhong0755/dsh-ssh.git"
@@ -13,6 +14,18 @@
   },
   "type": "module",
   "main": "lib/index.js",
+  "bin": {
+    "dsh-ssh-install": "./bin/install.mjs",
+    "dsh-ssh-uninstall": "./bin/uninstall.mjs"
+  },
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "test": "node --test",
+    "pack:check": "npm pack --dry-run --json"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
@@ -22,8 +35,9 @@
   "files": [
     "lib",
     "bin",
-    "docs",
+    "docs/*.png",
     "cordis.patch.yml",
+    "CHANGELOG.md",
     "README.md",
     "README.en.md",
     "LICENSE"
