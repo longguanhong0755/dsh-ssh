@@ -60,6 +60,41 @@ test('a non-object state file is treated as corrupt', async (t) => {
   assert.ok(store.recoveredFrom)
 })
 
+test('the legacy runtime default migrates to a build that can forward commands', async (t) => {
+  const home = await makeHome(t)
+  const root = join(home, 'ssh-remote')
+  await mkdir(root, { recursive: true })
+  const statePath = join(root, 'state.json')
+  await writeFile(statePath, JSON.stringify({
+    version: 1,
+    settings: { dshVersion: '0.2.1-rc.5' },
+    hosts: [],
+    workspaces: []
+  }), 'utf8')
+
+  const store = new RemoteStore({ dshHome: home })
+  await store.load()
+  assert.equal(store.settings.dshVersion, '0.2.2-rc.1')
+  const saved = JSON.parse(await readFile(statePath, 'utf8'))
+  assert.equal(saved.settings.dshVersion, '0.2.2-rc.1')
+})
+
+test('a deliberately pinned runtime version is not migrated', async (t) => {
+  const home = await makeHome(t)
+  const root = join(home, 'ssh-remote')
+  await mkdir(root, { recursive: true })
+  await writeFile(join(root, 'state.json'), JSON.stringify({
+    version: 1,
+    settings: { dshVersion: '0.2.1-rc.4' },
+    hosts: [],
+    workspaces: []
+  }), 'utf8')
+
+  const store = new RemoteStore({ dshHome: home })
+  await store.load()
+  assert.equal(store.settings.dshVersion, '0.2.1-rc.4')
+})
+
 test('an unreadable state file blocks every write instead of clearing data', async (t) => {
   const home = await makeHome(t)
   const root = join(home, 'ssh-remote')
