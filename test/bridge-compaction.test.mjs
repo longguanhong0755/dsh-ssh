@@ -71,6 +71,10 @@ function createState(bridge, session, extra = {}) {
     remoteStep: 0,
     toolSeqs: new Map(),
     pendingTools: [],
+    // `/compact` runs outside a turn, so it adopts the chat's route first; a
+    // bridged chat always has one from its picker.
+    model: { key: 'model-key', provider: 'deepseek', model: 'deepseek-v4.1-flash' },
+    modelKey: 'model-key',
     ...extra
   }
   bridge.sessions.set(session.id, state)

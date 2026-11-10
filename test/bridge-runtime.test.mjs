@@ -30,6 +30,10 @@ function createState(workspace, extra = {}) {
     queue: [],
     closed: false,
     turn: 1,
+    // A live chat always carries the route its picker resolved; `/compact` adopts
+    // it before the runtime boots, so the fixture must carry one too.
+    model: { key: 'model-key', provider: 'deepseek', model: 'deepseek-v4.1-flash' },
+    modelKey: 'model-key',
     ...extra
   }
 }
