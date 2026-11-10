@@ -618,6 +618,10 @@ let failures = 0
 // Layout problems are repaired by the write itself, so they only fail the run
 // when the command was not a repair.
 let layoutIssues = 0
+// A log that loads today but carries a repair note (renumbering, dropped
+// unsettled tool call) must still fail a scan, or `scan` would report success in
+// CI while the stored file keeps the defect.
+let dirty = 0
 for (const file of files) {
   const { frames, truncatedAt, header, events, partial } = readLog(file)
   const name = file.split(/[\\/]/).slice(-2).join('/')
@@ -656,6 +660,7 @@ for (const file of files) {
     for (const event of fixed.slice(Math.max(0, at - 2), at + 1)) console.log('    >', JSON.stringify(event).slice(0, 320))
   }
   console.log(`  after:  ${after}`)
+  if (before !== 'OK' || notes.length || renumberNotes.length || spanNotes.length) dirty += 1
   console.log(`  rewrites=${notes.length}${renumberNotes.length ? ` renumbered=${renumberNotes.length}` : ''}${spanNotes.length ? ` spans=${spanNotes.length}` : ''} openTail=${open.turn ?? '-'}/${open.step ?? '-'}`)
   for (const note of notes.slice(0, 12)) console.log(`    - ${note}`)
   for (const note of spanNotes) console.log(`    * ${note}`)
@@ -672,4 +677,4 @@ for (const file of files) {
   }
 }
 const repairedInPlace = write && command === 'repair'
-process.exitCode = failures ? 1 : layoutIssues && !repairedInPlace ? 1 : 0
+process.exitCode = failures ? 1 : (layoutIssues || dirty) && !repairedInPlace ? 1 : 0
