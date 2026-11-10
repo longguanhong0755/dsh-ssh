@@ -101,10 +101,22 @@ test('request headers and context windows are mirrored once per distinct value',
     bridge.sdkSessionEvent(state, { type: 'request/header', data: { header } })
     const headers = events.filter((event) => event.type === 'request/header')
     assert.equal(headers.length, 1)
-    assert.deepEqual(headers[0].data, { header })
+    // Native v4 requires a reason; without it the log cannot be restored.
+    assert.deepEqual(headers[0].data, { header, reason: 'initial' })
 
     bridge.sdkSessionEvent(state, { type: 'request/header', data: { header: { config: { ...header.config, model: 'deepseek-reasoner' } } } })
-    assert.equal(events.filter((event) => event.type === 'request/header').length, 2)
+    const changed = events.filter((event) => event.type === 'request/header')
+    assert.equal(changed.length, 2)
+    assert.equal(changed[1].data.reason, 'change')
+
+    bridge.sdkSessionEvent(state, {
+      type: 'request/header',
+      data: { header: { config: { ...header.config, model: 'deepseek-reasoner', maxTokens: 128000 } }, reason: 'series', startsSeries: true }
+    })
+    const series = events.filter((event) => event.type === 'request/header')
+    assert.equal(series.length, 3)
+    assert.equal(series[2].data.reason, 'series')
+    assert.equal(series[2].data.startsSeries, true)
 
     const context = { provider: 'deepseek-official', model: 'deepseek-chat', contextWindow: 1000000 }
     bridge.sdkSessionEvent(state, { type: 'request/context', data: context })
@@ -141,6 +153,103 @@ test('compaction of a bridged session uses the remote chat route', async () => {
     const chat = { purpose: 'chat', sessionId: 'local-session', provider: 'opencode-go', model: 'deepseek-v4.1-flash' }
     assert.equal(bridge.routeCompactionOptions(chat), chat)
     assert.equal(bridge.routeCompactionOptions(undefined), undefined)
+  })
+})
+
+test('the resolved route is mirrored before the remote reports its own', async () => {
+  await withBridge(async (bridge) => {
+    const { state, events } = createState()
+    state.model = {
+      provider: 'ds-break',
+      model: 'deepseek-v4.1-flash',
+      reasoningEffort: 'high',
+      maxTokens: 384000,
+      contextWindow: 200000,
+      config: { provider: 'ds-break', model: 'deepseek-v4.1-flash', reasoningEffort: 'high', maxTokens: 384000 }
+    }
+    bridge.mirrorResolvedModel(state)
+    const header = events.find((event) => event.type === 'request/header')
+    assert.ok(header)
+    assert.equal(header.data.header.config.provider, 'ds-break')
+    assert.equal(header.data.header.config.model, 'deepseek-v4.1-flash')
+    assert.equal(header.data.header.config.reasoningEffort, 'high')
+    assert.equal(header.data.reason, 'initial')
+    const context = events.find((event) => event.type === 'request/context')
+    assert.deepEqual(context.data, { provider: 'ds-break', model: 'deepseek-v4.1-flash', contextWindow: 200000 })
+
+    // The same route on the next turn is not repeated.
+    bridge.mirrorResolvedModel(state)
+    assert.equal(events.filter((event) => event.type === 'request/header').length, 1)
+    assert.equal(events.filter((event) => event.type === 'request/context').length, 1)
+
+    // A route change replaces both records with an explicit change reason.
+    state.model = { ...state.model, provider: 'lingxi', model: 'deepseek-v4.1', contextWindow: 1000000 }
+    bridge.mirrorResolvedModel(state)
+    const headers = events.filter((event) => event.type === 'request/header')
+    assert.equal(headers.length, 2)
+    assert.equal(headers[1].data.reason, 'change')
+    assert.equal(headers[1].data.header.config.provider, 'lingxi')
+    assert.equal(events.filter((event) => event.type === 'request/context').length, 2)
+  })
+})
+
+test('a header that changes beyond provider/model is mirrored instead of swallowed', async () => {
+  await withBridge(async (bridge) => {
+    const { state, events } = createState()
+    const base = { config: { provider: 'ds-break', model: 'deepseek-v4.1-flash', maxTokens: 384000, temperature: 0.2 } }
+    bridge.mirrorRequestRecord(state, { type: 'request/header', data: { header: base } })
+    bridge.mirrorRequestRecord(state, { type: 'request/header', data: { header: base } })
+    assert.equal(events.filter((event) => event.type === 'request/header').length, 1)
+    bridge.mirrorRequestRecord(state, {
+      type: 'request/header',
+      data: { header: { config: { ...base.config, temperature: 0.7 } } }
+    })
+    const headers = events.filter((event) => event.type === 'request/header')
+    assert.equal(headers.length, 2)
+    assert.equal(headers[1].data.reason, 'change')
+    assert.equal(headers[1].data.header.config.temperature, 0.7)
+  })
+})
+
+test('dedupe keys are hydrated from the anchor log so a restart does not duplicate', async () => {
+  await withBridge(async (bridge) => {
+    const header = { config: { provider: 'ds-break', model: 'deepseek-v4.1-flash', maxTokens: 384000 } }
+    const context = { provider: 'ds-break', model: 'deepseek-v4.1-flash', contextWindow: 200000 }
+    const { state, events } = createState()
+    state.agent.session.log = [
+      { type: 'request/context', data: context },
+      { type: 'request/header', data: { header, reason: 'initial' } }
+    ]
+    bridge.hydrateRequestKeys(state)
+    assert.equal(typeof state.headerKey, 'string')
+    assert.equal(typeof state.contextKey, 'string')
+    bridge.mirrorRequestRecord(state, { type: 'request/header', data: { header } })
+    bridge.mirrorRequestRecord(state, { type: 'request/context', data: context })
+    assert.equal(events.length, 0)
+    // The next real change still writes, and not as a second `initial`.
+    bridge.mirrorRequestRecord(state, {
+      type: 'request/header',
+      data: { header: { config: { ...header.config, maxTokens: 128000 } } }
+    })
+    const written = events.find((event) => event.type === 'request/header')
+    assert.equal(written.data.reason, 'change')
+  })
+})
+
+test('compaction prefers the chat route once one was resolved', async () => {
+  await withBridge(async (bridge) => {
+    bridge.sessions.set('local-session', {
+      localSessionId: 'local-session',
+      model: { provider: 'ds-break', model: 'deepseek-v4.1-flash' }
+    })
+    const rewritten = bridge.routeCompactionOptions({
+      purpose: 'compaction',
+      sessionId: 'local-session',
+      provider: 'opencode-go',
+      model: 'deepseek-v4.1-flash'
+    })
+    assert.equal(rewritten.provider, 'ds-break')
+    assert.equal(rewritten.model, 'deepseek-v4.1-flash')
   })
 })
 

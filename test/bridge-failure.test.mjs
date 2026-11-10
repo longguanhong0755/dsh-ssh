@@ -39,6 +39,18 @@ test('meaningful non-error output survives instead of a bare fallback', () => {
   assert.match(message, /permission denied by host policy/u)
 })
 
+test('a watchdog stop is reported as the cause', () => {
+  const stderr = [
+    '[llm-deepseek-api-key] model listing ...',
+    'dsh-ssh watchdog: no client heartbeat for 1800s; stopping the remote sdk runtime'
+  ].join('\n')
+  const message = runnerFailureMessage(stderr, FALLBACK)
+  assert.match(message, /watchdog/u)
+  assert.match(message, /no client heartbeat/u)
+  assert.doesNotMatch(message, /model listing/u)
+  assert.doesNotMatch(message, /no error line/u)
+})
+
 test('an empty log still explains what happened', () => {
   assert.equal(runnerFailureMessage('', FALLBACK), `${FALLBACK}; the remote log has no error line (retry, and inspect the remote service log if it repeats)`)
 })

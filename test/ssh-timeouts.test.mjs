@@ -40,13 +40,98 @@ function hostFor(port) {
   }
 }
 
-function makePool(tag) {
+function makePool(tag, logs = null) {
   return new SSHPool({
     knownHostsPath: join(tmpdir(), `dsh-ssh-timeout-${tag}-${process.pid}.json`),
     saveKnownHosts: async () => {},
-    log: () => {}
+    log: (level, message) => {
+      logs?.push(`${level}: ${message}`)
+    }
   })
 }
+
+// Anything listening is enough: the test only cares that the TCP connect moved
+// past ECONNREFUSED, so the fake server never answers the handshake.
+async function freePort() {
+  const server = net.createServer()
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const { port } = server.address()
+  await new Promise((resolve) => server.close(resolve))
+  return port
+}
+
+test('a refused connection is retried before it fails the session start', async () => {
+  const port = await freePort()
+  const logs = []
+  const pool = makePool('retry-refused', logs)
+  try {
+    const started = Date.now()
+    await assert.rejects(
+      pool.client(hostFor(port), { timeoutMs: 2000, attempts: 3 }),
+      (error) => {
+        assert.equal(error.code, 'remote-host-unreachable')
+        return true
+      }
+    )
+    const elapsed = Date.now() - started
+    assert.ok(elapsed >= 1700, `expected ~1.8s of backoff before giving up, saw ${elapsed}ms`)
+    assert.equal(logs.filter((line) => line.includes('retrying in')).length, 2)
+  } finally {
+    pool.dispose()
+  }
+})
+
+test('a hop that comes back inside the backoff window connects on a later try', async () => {
+  const port = await freePort()
+  const logs = []
+  const pool = makePool('retry-recover', logs)
+  const sockets = new Set()
+  const server = net.createServer((socket) => {
+    sockets.add(socket)
+    socket.on('error', () => {})
+    socket.on('close', () => sockets.delete(socket))
+    socket.on('data', () => {})
+  })
+  const listening = new Promise((resolve) => {
+    setTimeout(() => server.listen(port, '127.0.0.1', resolve), 250)
+  })
+  try {
+    await assert.rejects(
+      pool.client(hostFor(port), { timeoutMs: 250, attempts: 2 }),
+      (error) => {
+        // The retry got through the refused port and reached the handshake, so
+        // the failure is the silent server's timeout, not ECONNREFUSED.
+        assert.equal(error.code, 'remote-connection-timeout')
+        return true
+      }
+    )
+    assert.equal(logs.filter((line) => line.includes('retrying in')).length, 1)
+  } finally {
+    pool.dispose()
+    await listening
+    for (const socket of sockets) socket.destroy()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('an unresolvable host fails once instead of burning the retry budget', async () => {
+  const logs = []
+  const pool = makePool('retry-dns', logs)
+  try {
+    const started = Date.now()
+    await assert.rejects(
+      pool.client({ ...hostFor(22), host: 'dsh-ssh-no-such-host.invalid' }),
+      (error) => {
+        assert.equal(error.code, 'remote-host-not-found')
+        return true
+      }
+    )
+    assert.ok(Date.now() - started < 3000)
+    assert.equal(logs.filter((line) => line.includes('retrying in')).length, 0)
+  } finally {
+    pool.dispose()
+  }
+})
 
 test('a handshake dropped after the server banner rejects instead of hanging', async () => {
   const server = await fakeServer({ banner: true })
@@ -54,7 +139,7 @@ test('a handshake dropped after the server banner rejects instead of hanging', a
   try {
     const started = Date.now()
     await assert.rejects(
-      pool.client(hostFor(server.port), { timeoutMs: 5000 }),
+      pool.client(hostFor(server.port), { timeoutMs: 5000, attempts: 1 }),
       (error) => {
         assert.equal(error.code, 'remote-connection-closed')
         assert.match(error.message, /握手完成前关闭/u)
@@ -74,7 +159,7 @@ test('a silent server is bounded by the connect deadline', async () => {
   try {
     const started = Date.now()
     await assert.rejects(
-      pool.client(hostFor(server.port), { timeoutMs: 300 }),
+      pool.client(hostFor(server.port), { timeoutMs: 300, attempts: 1 }),
       (error) => {
         assert.equal(error.code, 'remote-connection-timeout')
         return true
@@ -93,7 +178,7 @@ test('exec bounds connection setup too, not only the command', async () => {
   try {
     const started = Date.now()
     await assert.rejects(
-      pool.exec(hostFor(server.port), 'printf ok', { timeoutMs: 10000, connectTimeoutMs: 300 }),
+      pool.exec(hostFor(server.port), 'printf ok', { timeoutMs: 10000, connectTimeoutMs: 300, attempts: 1 }),
       (error) => {
         assert.equal(error.code, 'remote-connection-timeout')
         return true

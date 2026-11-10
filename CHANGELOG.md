@@ -4,6 +4,18 @@
 
 ### 修复
 
+- 修复远程会话历史「全部消失」（侧边栏里所有远程项目都没有对话，但日志仍在磁盘上）：DSH 只从 Zstandard 日志的**第一个帧**读取会话头，并要求该帧恰好只有一行 header（`first frame is not exactly one header line`），否则 `list()` 静默跳过该会话。上一版 `npm run doctor` 写回时把整份日志压成了 2~9 个大帧，于是 4 个 anchor 会话既列不出来也打不开，而「解压所有帧再拼接」的校验仍然是绿的。现在所有写日志的路径（doctor、新增的 `npm run repack`）都通过 `scripts/log-frames.mjs` 的 `packLog()` 落盘：首帧只有 header、其余按 64 KiB 行对齐分块，并在写前断言往返一致、首帧单行；doctor 扫描时会单独报告 `header-frame` 状态，`real-verify` 也加了同一条不变式，避免再次"假绿"。
+- 修复远程会话修好后跑到「未分组」：DSH 的 workspace 注册表把记录的 `sessionIds` 当作可重新校验的缓存——某次读不到会话头，该会话就会被投影过滤掉，并在下一次写入时从记录里剪除，日志却完好无损。现在插件的原生投影（`lib/native.js`）在每次同步时按会话头里的 cwd 把属于 anchor 目录的会话重新挂回对应项目（最旧的先挂，保持侧边栏新到旧顺序），并刷新注册表的路径索引避免误剪；插件启动后 8s/30s 各再做一次，`POST /ssh-remote/native/sync` 也可手动触发，返回 `attached` 计数。`GET /ssh-remote/health` 增加 `native` 版本探针。
+- 修复 `ssh-remote` 主机连不上就立刻失败（`无法连接 root@127.0.0.1:2222: connect ECONNREFUSED`）：连接级失败按 600/1200/1800/2400ms 退避重试最多 5 次，认证失败、主机密钥、解析失败不重试；`/ssh-remote/health` 的 `transport` 字段名为 `2026-11-10 connect-retry` 的代码。
+- 修复桥接把远端会话的步骤编号直接写进本地 anchor 日志、导致整份会话历史打不开（`step/end does not match an open turn and step`、`step/start does not match the open turn and next step`、`seed request/header at index N has an invalid reason`）：远端按会话累计步骤号（回合中途接管的会话可能已经从 51 开始），锚点却按回合从 1 编号。现在桥接只用远端编号识别「重复的状态帧」与「远端已经走到下一步」，步骤号一律由本地计数器推导（每次 +1，且绝不复用刚关闭的编号），回合号也取本地编号，不再把远端回合号写进 `turn/end`。
+- 新增 `npm run repack`（`scripts/anchor-repack.mjs`）：只修 Zstandard 帧布局而不改任何事件内容，`node scripts/anchor-repack.mjs <file-or-dir> [...] [--write] [--chunk <bytes>]`，写前备份 `.bak-frames-<ms>`；`npm run doctor` 与它都接受目录（递归找 `session.v4.jsonl.zstd`，共用 `scripts/log-targets.mjs`），不再对目录报 `EISDIR`。
+- 新增 `npm run doctor`（`scripts/anchor-doctor.mjs`）：扫描并修复已经被写坏的 v4 anchor 日志——步骤编号错位、`step/end` 前没有结算的 tool/call、缺失的 `request/header.reason`、压缩影子区间引用错位的 seq；写入前自动备份为 `.bak-doctor-<ms>`，写完重新读盘校验。本机 25 个桥接会话中 4 个已被写坏，修复后 193/193 个存储会话都能被 harness 自身的 `validateStoredEvents` + `Session.fromRestore` 恢复。
+- 拆分大文件：`lib/bridge.js`（4,575 行）按职责拆到 `lib/bridge/`；`lib/client.js`（7,239 行）拆成 `lib/client/` 下的源文件，由 `npm run build:client` 生成仍需单文件注册的入口（产物与拆分前逐字节一致）；`npm run check` 改为递归校验 `lib/`、`bin/`、`scripts/` 下所有模块。
+- 修复远程会话思考内容有时不可见、长度被截断：headless 的 `--json` 投影对每个字符串有 8 KiB 上限，桥接又只把 `reasoning`/`text` 拼成两个标量。现在 headless profile 额外转发提交后的完整 `assistant/message`（不受投影上限影响），桥接优先使用这份权威内容，并按原生顺序保留 reasoning/text 块、usage 与流式记录；取消、失败或重连导致回合中途结束时，先把已流出的思考/正文落成持久 assistant 行再结束，不再被临时预览直接撤掉。步骤切换时用旧步骤坐标关闭上一步，失败回合只写一行 assistant 消息。
+- 修复桥接会话在远端运行的模型与本地选择不一致：桥接现在解析当前锚点会话的模型选择（provider/model/reasoningEffort），用本机 `resolveCallConfig`/`resolveModelInfo` 校验并补全 maxTokens 与上下文窗口，再据此初始化 SDK 运行时、生成 headless profile 的 `llm-pi-ai` provider 与 `agent-default-model` 配置，并按同一路由镜像本地 `request/header`/`request/context`（含完整配置去重，重启后从 anchor 日志恢复去重键）。模型变化会停用旧 runner 并用新 profile 重建；选中的路由在远端不可用时本回合明确失败，不再静默回退到远端默认模型。`/compact` 也跟随该会话的模型。
+
+- 修复远程会话长回合（超过 30 分钟）被误杀后报 `the remote dsh runner exited before finishing this turn; the remote log has no error line`：SDK 运行时的空闲看门狗只在提交提示词时重置，回合中途的长时间工具调用/抓取会被当作空闲进程清掉。现在回合进行期间会周期性续期看门狗（默认每 1/3 TTL），看门狗真正触发时也会把原因写进远端错误日志并在界面上展示，便于区分空闲回收与真实崩溃。
+- 修复远端排队回合（远端 inbox 中等待的提示词在上一回合结束后自动开始）时本地桥接仍认为空闲：这类回合没有看门狗续期，长回合仍会被当作空闲运行时清掉；字节偏移不落盘，重载后会重复回放整段回合；界面也一直显示空闲。现在远端自行开始的回合会被桥接接管，续期看门狗、持久化偏移并显示为运行中。回合中途恢复（journal 偏移已经落在本回合内部、没有 `turn/start` 可读）同样会被接管：新开的本地回合把远端步骤重新编号为 1 起，已打开的 anchor 回合则原地续写，不重复写 `turn/start`；附着时从本地日志恢复当前步骤、未闭合步骤与未完成的工具调用，空闲时收到的 `turn/end` 不再补写一个重复的 `turn/start`（这正是此前 anchor 日志被写坏的原因）。
 - 修复 `/compact` 遇到瞬时错误就直接失败（本地与远程）：手动压缩只有一次摘要请求、没有重试。现在压缩流遇到超时、限流、5xx、连接中断等瞬时错误会从头发起重试（本地默认 3 次、远端命令默认 2 次，指数退避，可取消），失败尝试的部分输出不会混入重试结果；远端失败时读取 `compaction/end` 的真实原因并展示，而不是只报 “could not produce a useful summary”。插件热重载后压缩路由包装由新版本替换，不会叠加。
 - 修复远程会话 `/compact` 在旧运行时工作区上直接失败：会话附载、每轮开始和压缩前都会把工作区切到设置中的目标运行时（目标版本已安装时），并停掉用旧 dsh 启动的 SDK/warm runner 后重新启动；不再因为 journal 里记录的旧 dsh 路径而一直提示 `still runs dsh 0.2.1-rc.5`。目标版本尚未安装时，错误信息会明确要求先在设备页重新安装远端服务。
 - 修复远端 runner 异常退出时把普通 info 日志（如 `[llm-deepseek-api-key] model listing ...`）当作失败原因显示：现在只保留真正的错误行，没有错误行时明确说明 runner 已退出并提示重试/查看远端日志。
@@ -20,6 +32,7 @@
 - 远程会话每步的 assistant 消息现在携带该步全部 tool-call 块（与原生会话一致），修复工具调用与结果配对不完整导致的上下文压缩失败。
 - 修复远程会话执行 `/compact` 时提示 `Request timed out.`：压缩请求此前沿用了指向远端网关的模型选择，本机无法连接；现在只把远程会话的压缩请求改走本机可达的路由，本地会话模型不变。
 - 修复远程会话底部统计只剩「轮/步」：桥接时补传每步的 usage 与流式记录，并镜像 `request/header`、`request/context`，tok/s、总 token、缓存命中率与上下文占用与本地会话一致。
+- 修复桥接镜像的 `request/header` 缺少原生必需的 `reason`、导致 anchor 会话在重新加载时整份日志判定损坏：现在首个请求写 `initial`、之后配置变化写 `change`，远端显式给出的 `resume`/`series` 原样沿用，且只有 `startsSeries` 为真时才携带该字段。
 - 修复 SELinux 强制模式主机上创建项目失败（`status=203/EXEC`）：便携 Node 解压在家目录下带有 `admin_home_t` 标签，systemd 的 `initrc_t` 无法执行；安装或复用运行时前统一 `chcon -t bin_t`。
 - 修复本地凭证文档与远端 dsh 运行时不兼容导致的启动失败：上传前把 `version: "1"` 规范为数字，并跳过远端不支持的记录（模型密钥 `refs` 保留）。
 - 修复健康检查在 dsh 尚未监听端口时立即判定失败的问题；状态探测补回进程运行时长，启动中的工作区不再显示为异常，HTTP 状态码也不会再被日志尾部污染。
