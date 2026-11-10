@@ -61,7 +61,7 @@ function createState(bridge, session, extra = {}) {
     compacting: false,
     compactForwarding: false,
     remoteCompaction: null,
-    sdk: { ready: true },
+    sdk: { ready: true, localReady: true },
     stream: { close() {} },
     sdkPending: new Map(),
     queue: [],
