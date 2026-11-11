@@ -73,7 +73,8 @@ function expectTypedError(error) {
 }
 
 async function readState(home) {
-  const store = new RemoteStore({ dshHome: home })
+  // Read-only against the OS credential store; see e2e-live.mjs.
+  const store = new RemoteStore({ dshHome: home, secretWrites: false })
   await store.load()
   return store
 }

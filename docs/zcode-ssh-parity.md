@@ -34,7 +34,8 @@
 | 查看文件：真实远程目录树 | host 侧文件树 | `84-remote-files.js` + `/ssh-remote/files` | 实机验证 |
 | 流式会话 / 工具调用 / 思考过程 | §4、§5.2 | SDK runner + bridge 保真转发 | 实机验证（`docs/demo-streaming.png`） |
 | 流式 revision 连续性 | §5.2 `assistantStreamRevision` | `nextStreamRevision()`，跨轮次单调 | 实机验证 |
-| 健康自检 | ZCode 无对应界面（插件自有） | `GET /ssh-remote/health`（可选 `?deep=1`）：store、anchor/registry、bridge 会话与 journal、SSH 连接、逐工作区运行态 | 实机验证（e2e health 步骤） |
+| 健康自检 | ZCode 无对应界面（插件自有） | `GET /ssh-remote/health`（可选 `?deep=1`）：store、anchor/registry、bridge 会话与 journal、SSH 连接、逐工作区运行态、凭据存储 | 实机验证（e2e health 步骤） |
+| 凭据存储 | ZCode 无对应界面（插件自有） | `lib/secrets.js`：Windows 凭据管理器 / macOS 钥匙串 / Linux libsecret，加载时一次性迁移；`state.json` 只留 `auth.secretBackend`；无凭据库时回退 0600 文件 | 实机验证（Windows CredWrite/CredRead 往返；macOS/Linux 走单测） |
 | 侧栏/设备页数据 | ZCode 侧栏与设备页各自取数 | `GET /ssh-remote/overview` 一次返回 hosts + workspaces + settings，行装饰与设备页共用 | 已实现 |
 | 悬停预热 | ZCode 设备切换不重复握手 | 设备行 `pointerenter` → `/ssh-remote/hosts/warm`，按主机 60 秒节流，连接池复用 | 已实现 |
 | 按主机批量状态 | ZCode host 侧一次采样 | `statusMany`：一台主机一次 exec，带 `@@SVC:<n>@@` 标签分段；失败整机标记不可达 | 实机验证（e2e status batch） |
@@ -48,7 +49,7 @@
 2. **更新中 / 需要更新的视觉**：状态计算与锁行为已验证，徽标样式与 ZCode 的对照截图还没采。
 3. **健康自检**：`/ssh-remote/health` 已提供本地自检与 `?deep=1` 逐工作区探测（P1-3 完成）；客户端还没有把自检结果展示到界面上。
 4. **轮询成本**：已改为按主机批量（一台设备一次 exec）、`/ssh-remote/overview` 单请求、行装饰 5 秒且后台隐藏时暂停；桌面端 poll 仍是固定 5 秒节拍，未做“有变化才推送”。
-5. **凭据存放**：仍在 `state.json`（0600、gitignore）；P4 迁移到系统钥匙串。
+5. **凭据存放**：SSH 密码/私钥口令已迁移到系统凭据库（Windows 凭据管理器 / macOS 钥匙串 / libsecret），`state.json` 只保留 `auth.secretBackend`；没有可用凭据库时回退 0600 文件，`/ssh-remote/health` 的 `secrets` 检查会告警。macOS/Linux 实机路径尚未跑过，目前由单测覆盖其命令行协议。
 
 ## 维护方式
 

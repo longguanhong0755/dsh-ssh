@@ -111,6 +111,7 @@ node <插件目录>\bin\install.mjs --profile desktop
 ## 数据与安全
 
 - 设备与设置保存在本机 `$DSH_HOME/ssh-remote/state.json`（POSIX 上为 0600；Windows 依赖用户配置目录的 ACL），不写入远程；
+- SSH 密码与私钥口令优先存进系统凭据库：Windows 凭据管理器、macOS 钥匙串、Linux libsecret（`secret-tool`）。`state.json` 只留下 `auth.secretBackend` 标记，密码不落盘；凭据跟随系统账户，换一台电脑需要重新输入密码。系统没有可用凭据库时退回 0600 文件，`GET /ssh-remote/health` 的 `secrets` 检查会给出告警；
 - 远程 dsh 只监听 `127.0.0.1`，不向局域网暴露端口；
 - 首次连接记录主机指纹，之后指纹变化会拒绝连接；
 - 可选把本机模型凭证以 0600 同步到远程工作区。

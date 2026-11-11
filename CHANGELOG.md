@@ -2,7 +2,14 @@
 
 ## Unreleased
 
+### 安全
+
+- SSH 密码与私钥口令不再落盘：`lib/secrets.js` 在 Windows 用凭据管理器（PowerShell 内联 `CredWrite`/`CredRead`，密钥走 stdin）、macOS 用钥匙串（`security -i`，载荷不进 argv，写完读回校验）、Linux 用 libsecret（`secret-tool`，密钥走 stdin）。`RemoteStore` 首次加载把 `state.json` 里的明文迁进系统凭据库，文件只保留 `auth.secretBackend` 标记；进程内仍保留明文供 SSH 连接使用，`save()` 统一脱敏。系统没有凭据库或写入失败时保留原来的 0600 文件行为并记日志，不丢密码；凭据库读不到密码时连接直接提示「请重新输入密码」，而不是泛化的认证失败。`remoteStore({ secretWrites: false })` 供 e2e 只读克隆，不会改动用户的凭据库。`/ssh-remote/health` 新增 `secrets` 检查，报告后端与仍留在文件里的设备数；`publicHost.auth` 增加 `secretStorage`。Windows 本机已实测写入/读取/删除往返（含中文与空格密码），macOS/Linux 命令行协议由单测覆盖。
+
 ### 工具
+
+- 状态轮询改为按主机批量：`statusMany` 用一台设备一次 exec 跑完该设备所有工作区（`@@WSS:<n>@@`/`@@SVC:<n>@@` 分段），不再按项目数开 SSH 通道；主机级失败只把该设备的工作区标成 `unreachable`，不影响其它设备。成功后 `markHostConnected`，失败 `markHostUnreachable`，只在状态变化时落盘。设备页与侧栏行装饰改用单请求 `GET /ssh-remote/overview`（hosts + workspaces + settings），设备行悬停预热 `POST /ssh-remote/hosts/warm`（按主机 60 秒节流）。`scripts/e2e-live.mjs` 增加 `health` 与 `status batch` 两步，home130/home132 实测 22/22 通过。
+- `/ssh-remote/health` 从「只报版本号」改成真正的本地自检：store、anchor/registry、bridge 会话与 journal、SSH 连接、凭据存储；`?deep=1` 时按工作区探测远端运行态（带超时），不写任何状态。9 个单测覆盖健康/缺失/残留/SDK 失败/深探测/超时/跳过主机/连接计数。
 
 - 新增真机稳定性矩阵：`scripts/e2e-live.mjs` 用临时 DSH home（克隆主机记录、不碰用户工作区）在专用远端目录走完 `连接 → 创建 → 连续探测 ×5 → SSH 掉线 → 停止 → 启动 → 重启 → 日志 → 删除`，可用 `--parallel` 并发创建两个工作区，产物写到 `analysis/e2e/<stamp>/`；`scripts/e2e-bridge.mjs` 用真实远端 dsh + 假本地 Agent 跑首轮、追问、排队、取消与「回合中 SSH 掉线」，失败时保留远端 `out.jsonl`/`err.log`/pid 与本地回合状态。两者都在 finally 里清理远端目录，并 `pool.dispose()` 让 Node 退出；`npm run e2e:live` / `npm run e2e:bridge` 直接复现（130/132 实测全绿）。另加 `scripts/reload.mjs`（`npm run reload`）：通过 pluginManager RPC 热重载插件并等到 `fiberPhase=active`，用于不重启应用地验证新代码。
 - 新增 `npm run verify` 与 GitHub Actions：一条命令依次跑模块语法校验、185 个测试、`lib/client.js` 重新构建后逐字节比对（发现过期会还原并失败）、`npm pack --dry-run` 内容审计（拒绝 `analysis/`、`state.json`、`known_hosts.json`、`lib/client/` 等本机文件进入包）。CI 在 Ubuntu（Node 22/24）与 Windows（Node 22）各跑一遍。

@@ -13,7 +13,7 @@ async function makeHome(t) {
 
 test('a missing state file starts a fresh install and writes defaults', async (t) => {
   const home = await makeHome(t)
-  const store = new RemoteStore({ dshHome: home })
+  const store = new RemoteStore({ dshHome: home, secrets: false })
   await store.load()
   assert.equal(store.loaded, true)
   assert.equal(store.loadError, null)
@@ -33,7 +33,7 @@ test('a corrupt state file is backed up instead of overwritten', async (t) => {
   const statePath = join(root, 'state.json')
   await writeFile(statePath, '{ this is not json', 'utf8')
 
-  const store = new RemoteStore({ dshHome: home })
+  const store = new RemoteStore({ dshHome: home, secrets: false })
   await store.load()
   assert.equal(store.loaded, true)
   assert.ok(store.recoveredFrom.startsWith(`${statePath}.corrupt-`))
@@ -55,7 +55,7 @@ test('a non-object state file is treated as corrupt', async (t) => {
   await mkdir(root, { recursive: true })
   await writeFile(join(root, 'state.json'), '[]', 'utf8')
 
-  const store = new RemoteStore({ dshHome: home })
+  const store = new RemoteStore({ dshHome: home, secrets: false })
   await store.load()
   assert.ok(store.recoveredFrom)
 })
@@ -72,7 +72,7 @@ test('the legacy runtime default migrates to a build that can forward commands',
     workspaces: []
   }), 'utf8')
 
-  const store = new RemoteStore({ dshHome: home })
+  const store = new RemoteStore({ dshHome: home, secrets: false })
   await store.load()
   assert.equal(store.settings.dshVersion, '0.2.2-rc.1')
   const saved = JSON.parse(await readFile(statePath, 'utf8'))
@@ -90,7 +90,7 @@ test('a deliberately pinned runtime version is not migrated', async (t) => {
     workspaces: []
   }), 'utf8')
 
-  const store = new RemoteStore({ dshHome: home })
+  const store = new RemoteStore({ dshHome: home, secrets: false })
   await store.load()
   assert.equal(store.settings.dshVersion, '0.2.1-rc.4')
 })
@@ -103,7 +103,7 @@ test('an unreadable state file blocks every write instead of clearing data', asy
   // must not be mistaken for "no state yet".
   await mkdir(join(root, 'state.json'))
 
-  const store = new RemoteStore({ dshHome: home })
+  const store = new RemoteStore({ dshHome: home, secrets: false })
   await assert.rejects(() => store.load())
   assert.ok(store.loadError)
   await assert.rejects(() => store.save(), /拒绝覆盖/u)

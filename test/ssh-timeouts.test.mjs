@@ -190,3 +190,23 @@ test('exec bounds connection setup too, not only the command', async () => {
     await server.close()
   }
 })
+
+test('a keychain-only host without a readable secret explains the failure', async () => {
+  const pool = makePool('keychain')
+  const savedAgent = process.env.SSH_AUTH_SOCK
+  delete process.env.SSH_AUTH_SOCK
+  try {
+    await assert.rejects(
+      pool.connectConfig({ ...hostFor(22), auth: { kind: 'password', password: '', secretBackend: 'windows' } }),
+      /系统凭据库/u
+    )
+    const config = await pool.connectConfig({
+      ...hostFor(22),
+      auth: { kind: 'password', password: 'x', secretBackend: 'windows' }
+    })
+    assert.equal(config.password, 'x')
+  } finally {
+    if (savedAgent !== undefined) process.env.SSH_AUTH_SOCK = savedAgent
+    pool.dispose()
+  }
+})

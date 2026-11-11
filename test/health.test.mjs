@@ -148,3 +148,24 @@ test('ssh connection counts come from the transport pool', async () => {
   assert.equal(ssh.state, 'ok')
   assert.match(ssh.detail, /1\/2 条连接就绪/u)
 })
+
+test('the secrets check names the OS vault and its device count', async () => {
+  const store = await makeStore([])
+  store.secretStatusAsync = async () => ({ enabled: true, backend: 'windows', keychain: 2, plaintext: 0, migrated: 2 })
+  const report = await buildHealth({ store })
+  const secrets = check(report, 'secrets')
+  assert.equal(secrets.state, 'ok')
+  assert.match(secrets.detail, /Windows 凭据管理器/u)
+  assert.equal(secrets.keychain, 2)
+  assert.equal(secrets.plaintext, 0)
+})
+
+test('plaintext credentials without a vault are reported as a warning', async () => {
+  const store = await makeStore([])
+  store.secretStatusAsync = async () => ({ enabled: true, backend: '', keychain: 0, plaintext: 1, migrated: 0 })
+  const report = await buildHealth({ store })
+  const secrets = check(report, 'secrets')
+  assert.equal(secrets.state, 'warn')
+  assert.match(secrets.detail, /state\.json（0600）/u)
+  assert.equal(secrets.backend, 'file')
+})

@@ -113,7 +113,9 @@ function checkStatusShape(status, { expectRunning = true } = {}) {
 }
 
 async function readState(home) {
-  const store = new RemoteStore({ dshHome: home })
+  // Read secrets from the OS store but never write to it: an e2e run must not
+  // change the user's credential vault.
+  const store = new RemoteStore({ dshHome: home, secretWrites: false })
   await store.load()
   return store
 }

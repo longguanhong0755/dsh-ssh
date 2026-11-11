@@ -111,6 +111,7 @@ The **SSH Remote** panel only manages devices; workspaces are created from the m
 ## Data and security
 
 - Devices and settings live in the local `$DSH_HOME/ssh-remote/state.json` (mode 0600 on POSIX; on Windows it inherits the user-profile ACL) and are never written to the remote;
+- SSH passwords and key passphrases go to the OS credential store: Windows Credential Manager, the macOS Keychain, or libsecret (`secret-tool`) on Linux. `state.json` keeps only an `auth.secretBackend` marker, never the secret; credentials follow the OS account, so moving to another computer requires re-entering the password. When no vault is available the 0600 file remains the fallback and the `secrets` check in `GET /ssh-remote/health` warns about it;
 - The remote dsh listens on `127.0.0.1` only; no LAN port is exposed;
 - Host keys are recorded on first connect and later changes are rejected;
 - Local model credentials can optionally be synced to the remote workspace with mode 0600.

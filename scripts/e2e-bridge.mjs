@@ -51,7 +51,7 @@ function textOf(content) {
 }
 
 async function prepareHome() {
-  const source = new RemoteStore({ dshHome: sourceHome })
+  const source = new RemoteStore({ dshHome: sourceHome, secretWrites: false })
   await source.load()
   const host = source.hosts.find((row) => row.name === hostName)
   if (!host) throw new Error(`host not found in ${sourceHome}: ${hostName}`)
@@ -74,7 +74,7 @@ async function prepareHome() {
     workspaces: []
   }
   await writeFile(join(tempHome, 'ssh-remote', 'state.json'), `${JSON.stringify(state, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
-  const store = new RemoteStore({ dshHome: tempHome })
+  const store = new RemoteStore({ dshHome: tempHome, secretWrites: false })
   await store.load()
   const knownHostsPath = join(store.root, 'known_hosts.json')
   const sshPool = new SSHPool({
