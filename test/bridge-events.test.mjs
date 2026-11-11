@@ -315,3 +315,93 @@ test('an oversized event line fails the turn instead of dropping events', async 
     await rm(root, { recursive: true, force: true })
   }
 })
+
+// The polling fallback used to hand parsed lines straight to consumeEvent,
+// which has no case for JSON-RPC records. After an SSH drop the SDK runner's
+// stream frames still rendered, but every durable record was discarded: no
+// assistant message, no step/end, no turn/end, so the chat stayed "running"
+// forever. Polled bytes must go through the same dispatcher as the tail.
+test('the polling fallback mirrors JSON-RPC SDK records', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-ssh-bridge-'))
+  const bridge = new SessionBridge({ pool: {}, store: { root }, manager: {}, log: () => {} })
+  const { state, events } = createState(bridge)
+  try {
+    state.remoteSessionId = 'remote-session'
+    const finished = []
+    bridge.finish = (target) => {
+      target.running = false
+      finished.push(target)
+    }
+    const record = (event) => JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'session.event',
+      params: { sessionId: 'remote-session', event }
+    })
+    state.buffer = [
+      record({ type: 'turn/start', seq: 1, data: { turn: 1 } }),
+      record({ type: 'step/start', seq: 2, data: { turn: 1, step: 1 } }),
+      record({
+        type: 'assistant/message',
+        seq: 3,
+        data: { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text: 'answer' }] } }
+      }),
+      record({ type: 'step/end', seq: 4, data: { turn: 1, step: 1 } }),
+      record({ type: 'turn/end', seq: 5, data: { turn: 1, reason: { kind: 'completed' } } })
+    ].join('\n') + '\n'
+    bridge.consume(state)
+    assert.equal(finished.length, 1)
+    assert.deepEqual(events.map((event) => event.type), [
+      'turn/start',
+      'step/start',
+      'assistant/message',
+      'step/end',
+      'turn/end'
+    ])
+    assert.deepEqual(events[2].data.message.content, [{ type: 'text', text: 'answer' }])
+    assert.equal(state.turnOpen, false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+// A relaunched runner recreates out.jsonl. The tail has a reset guard for
+// this; the polling transport used to wait for a file that can never reach the
+// saved offset, so the turn hung with a live pid and no error.
+test('polling re-reads from the start when the event log was recreated', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-ssh-bridge-'))
+  const bridge = new SessionBridge({ pool: {}, store: { root }, manager: {}, log: () => {} })
+  const { state, events } = createState(bridge)
+  const calls = []
+  try {
+    state.remoteSessionId = 'remote-session'
+    state.offset = 5000
+    state.eventsFile = '/remote/bridge/session/sdk/out.jsonl'
+    state.pidFile = '/remote/bridge/session/sdk/runner.pid'
+    state.stderrFile = '/remote/bridge/session/sdk/err.log'
+    bridge.finish = (target) => { target.running = false }
+    const chunk = `${JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'session.event',
+      params: {
+        sessionId: 'remote-session',
+        event: { type: 'turn/end', seq: 9, data: { turn: 1, reason: { kind: 'completed' } } }
+      }
+    })}\n`
+    bridge.pool = {
+      async exec(host, command) {
+        calls.push(command)
+        // First round trip: probe size and liveness. Second: read the log.
+        if (calls.length === 1) return { stdout: '@@SIZE 120\n@@ALIVE alive\n' }
+        return { stdout: chunk }
+      }
+    }
+    await bridge.poll(state)
+    assert.equal(calls.length, 2)
+    assert.match(calls[1], /tail -c \+1 /u)
+    assert.equal(state.offset, Buffer.byteLength(chunk, 'utf8'))
+    assert.ok(events.some((event) => event.type === 'turn/end'))
+    if (state.timer) clearTimeout(state.timer)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
