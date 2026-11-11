@@ -4,6 +4,7 @@
 
 ### 工具
 
+- 新增 `npm run verify` 与 GitHub Actions：一条命令依次跑模块语法校验、176 个测试、`lib/client.js` 重新构建后逐字节比对（发现过期会还原并失败）、`npm pack --dry-run` 内容审计（拒绝 `analysis/`、`state.json`、`known_hosts.json`、`lib/client/` 等本机文件进入包）。CI 在 Ubuntu（Node 22/24）与 Windows（Node 22）各跑一遍。
 - 新增 `npm run scan`（`scripts/session-scan.mjs`）：只读扫描 `DSH_HOME/sessions` 下的 `session.v4.jsonl.zstd`，逐份报告帧布局、解压、JSON 行完整性与最后一个事件类型；有问题的会话以退出码 1 结束，便于在「会话从侧栏消失」时先定位日志，而不是靠猜。
 
 ### 修复
