@@ -20,6 +20,7 @@
   },
   "scripts": {
     "check": "node scripts/check.mjs",
+    "scan": "node scripts/session-scan.mjs",
     "doctor": "node scripts/anchor-doctor.mjs",
     "repack": "node scripts/anchor-repack.mjs",
     "build:client": "node scripts/build-client.mjs",
