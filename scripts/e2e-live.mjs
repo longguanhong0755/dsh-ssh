@@ -26,6 +26,7 @@ import { RemoteStore } from '../lib/store.js'
 import { SSHPool } from '../lib/ssh.js'
 import { TargetPool } from '../lib/targets.js'
 import { RemoteManager } from '../lib/remote.js'
+import { buildHealth } from '../lib/health.js'
 import { q } from '../lib/util.js'
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -241,6 +242,26 @@ async function runHost(host, manager, pool) {
       if (pids.size !== 1) throw new Error(`pid changed across idle probes: ${[...pids].join(', ')}`)
       await saveStep(host, 'probe-x5', seen)
       return { summary: `pid=${seen[0].pid} stable, http=${seen.map((item) => item.http).join('/')}` }
+    })
+
+    // 3b. health self-check: the same report `/ssh-remote/health?deep=1`
+    //     serves must see this workspace running, without a bridge session.
+    await step(host, 'health', async () => {
+      const report = await buildHealth({
+        store: manager.store,
+        bridge: null,
+        ctx: null,
+        pool,
+        manager,
+        deep: true,
+        deepTimeoutMs: 20000
+      })
+      await saveStep(host, 'health', report)
+      const runtime = report.checks.find((item) => item.id === 'runtime')
+      const row = runtime?.workspaces?.find((item) => item.workspaceId === workspace.id)
+      if (!row || row.state !== 'running') throw new Error(`health runtime row=${JSON.stringify(row)}`)
+      if (!report.ok) throw new Error(`health not ok: ${JSON.stringify(report.checks.filter((item) => item.state === 'error'))}`)
+      return { summary: `ok=${report.ok} checks=${report.checks.map((item) => item.state).join('/')} http=${row.httpStatus}` }
     })
 
     // 4. connection drop: a command in flight must settle when the socket dies
