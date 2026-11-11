@@ -264,6 +264,25 @@ async function runHost(host, manager, pool) {
       return { summary: `ok=${report.ok} checks=${report.checks.map((item) => item.state).join('/')} http=${row.httpStatus}` }
     })
 
+    // 3c. batched status: one tagged exec must report the live workspace and a
+    //     missing one in the same round trip, without confusing their sections.
+    await step(host, 'status batch', async () => {
+      const ghost = {
+        id: `${workspace.id}-ghost`,
+        name: 'ghost',
+        serviceKind: workspace.serviceKind,
+        pidFile: `${remotePath}/.no-such-ghost.pid`,
+        port: workspace.port,
+        desiredState: 'stopped',
+        nodeBin: workspace.nodeBin
+      }
+      const [live, absent] = await manager.statusMany(host, [workspace, ghost], { fresh: true, skipLog: true })
+      await saveStep(host, 'status-batch', [live, absent])
+      if (live.state !== 'running') throw new Error(`live workspace state=${live.state}`)
+      if (absent.state !== 'stopped') throw new Error(`absent workspace state=${absent.state}`)
+      return { summary: `live=${live.state}/${live.httpStatus} absent=${absent.state}` }
+    })
+
     // 4. connection drop: a command in flight must settle when the socket dies
     //    (an unsettled ssh2 close used to hang create forever), and the next
     //    probe must reconnect on its own.
