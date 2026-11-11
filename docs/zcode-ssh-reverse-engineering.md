@@ -470,6 +470,43 @@ type SessionAssistantStreamFrame =
 
 > 旧版本（`styles-Dv5E6Odo.js`）的结论仍然成立，但颜色值以 3.17.2 安装版为准：项目名是 subtle 灰、设备名是 remote muted 灰、云朵 online 是 muted 灰而不是品牌蓝。
 
+### 5.4 3.18.0 复核（2026-11，REA 证据）
+
+3.18.0 用 REA v6.8.0 重新抽取，证据包在 `analysis/zcode-3180-rea.json.gz`（120,612,483 字节），配套摘要 `analysis/zcode-3180-rea-summary.json` 与 `.err`。抽取范围是远程相关的后端 chunk、wizard bundle 与 i18n 资源，2829 个无关文件不在范围内。
+
+**REA 的执行限制（必须记录，否则会误以为「分析通过」）**：wizard bundle `renderer/assets/styles-BhvI6_DD.js` 有 7.16 MB，REA 在 `max_semantic_nodes_per_file=20000` 下耗尽 1024 MiB V8 堆后中止。因此摘要里的 41,255 个 semantic unknown 与 21 条 limitation 主要集中在渲染层，后端 chunk 全部正常产出。渲染层结论以 3.17.2 的源码级还原（§5.3）和 3.18.0 的 i18n 比对为准，不依赖这次 REA 的渲染层输出。
+
+**后端：与 3.17.2 字节级等价**。3.18.0 的 `main/chunk-KEOP5VN5.js`（12.7 KB）与 3.17.2 的 `main/chunk-SDG2IUX5.js`、3.18.0 的 `host/chunk-KSQ6KYHM.js` 与 3.17.2 的 `host/chunk-IVUCKMN5.js`，去掉 bundler 的 import 行后主体逐字节相同（折叠 diff 只有 import 行不同；这些文件是单行 + 结尾换行，不能用「取第一行之后」来比）。结论：`SSHBackend` 的 detect、SFTP 分块上传、错误归一化、`assetInstallMode` 语义在 3.18.0 没有变化，本插件按 3.17.2 实现的部分无需重做。
+
+**i18n 增量**：中文 key 从 364 增至 366，原有 key 0 处改动；locale 从 2 个增至 5 个。新增的两条正是 3.18.0 唯一的新用户可见行为——远端服务更新中的报错：
+
+| key | 文案 |
+|---|---|
+| `remote.error.sourceServerUpdateInProgress` | `远程设备正在更新远端服务` |
+| `remote.error.sourceServerUpdateInProgress.reason` | `这次连接没有发起。等更新完成后点击重试。` |
+
+同一个错误常量也出现在 `main/chunk-GMTOLIE6.js`、`host/chunk-RB4EITEQ.js`、`renderer/assets/validation-hnAQ_U3V.js`、`extension-host/index.js`、`scheduler/index.js`，说明它是跨进程统一的错误码，而不是渲染层临时文案。
+
+**状态机增量**：设备状态新增 `updating`（更新中）与 `needsUpdate`（需要更新）；连接向导副标题新增 `remote.connectingSubtitleUpdating`（`正在更新远端服务`），设备动作新增 `remote.action.update-server`（`更新远端`）。状态映射 `wM` 把 `pending/updating/progress` 都归到 spinner，日志级别 `info`。
+
+**本插件对应的实现（3.18.0 parity）**
+
+1. **远端安装锁**（`lib/remote/runtime.js` `acquireInstallLock`）：两台桌面指向同一主机时，两个 `npm install` 写同一个 `dsh-<version>` 树会毁掉 `node_modules`。锁用远端 `mkdir` 的原子性，holder 记录 `started/version`；超过 `INSTALL_LOCK_STALE_MS`（30 分钟，大于安装超时 15 分钟）视为崩溃残留并被接管；竞争失败方收到与 ZCode 完全一致的错误码、消息和 reason。锁在 `ensureRuntime` 的 `finally` 里释放，抛错也不会泄漏。
+2. **错误贯通**：`jobs` 保存 `errorCode/errorReason` → 客户端 `20-api` 抛出带 `code/reason` 的错误 → `40-background-flow` 记录并在轮询重抛 → 向导失败态多渲染一行 reason（§2.5.1 的 ZCode 失败卡片结构）。
+3. **设备页状态**：`hostStatusFor` 优先读 `host.updating` → `更新中`（progress）；运行中但部署版本与本机 `dshVersion` 不一致 → `需要更新`（warning）。`publicHost` 增加 `updating/updatingVersion/updatingSince`。
+4. **更新确认卡片**：安装前 `runtime-check` 返回 `outdated/installedVersion`；确认页在更新场景显示「远端当前为 dsh {from}，将替换为本机的 dsh {to}」，按钮为 `更新远端`，并且带 `mode: 'update'`。ZCode 的语义是「重新安装远端服务，保留项目与任务」，本插件 `force` 只删 `dsh-<version>` 程序目录，不动远程 home。
+5. **失败与真实故障分离**：`mkdir` 失败且锁目录不存在（权限/只读 home）不再伪装成「正在更新」，而是报「无法在 … 创建安装锁，请检查远程目录权限」；主机无输出时报「没有返回锁状态」。
+
+**验证**：`test/install-lock.test.mjs` 8 项单测（获取/占用/接管/异常/lock 错误/无输出/版本探测）；`scripts/e2e-lock.mjs` 在 home130、home132 实机跑完 acquire → contend → release → stale takeover → concurrent race 共 16 步全部通过（用一次性 `/root/dsh-lock-e2e-<stamp>`，不触碰已部署运行时）。
+
+| 3.18.0 文件 | 内容 |
+|---|---|
+| `out/main/chunk-KEOP5VN5.js` | `SSHBackend`（主体与 3.17.2 `chunk-SDG2IUX5.js` 相同） |
+| `out/host/chunk-KSQ6KYHM.js` | host 侧 `SSHBackend`（主体与 3.17.2 `chunk-IVUCKMN5.js` 相同） |
+| `out/main/chunk-INNZ7GPR.js`（101 KB） | 远程资产安装、`assetInstallMode`、`remoteWrapperPath` |
+| `out/renderer/assets/styles-BhvI6_DD.js`（7.16 MB） | 渲染层主 bundle；REA 因堆上限未完成，结论沿用 §5.3 |
+| `out/renderer/assets/IntlProvider-C0vyPcb8.js` | `remote.*` 文案，含新增 `sourceServerUpdateInProgress` |
+
 ## 6. 关键源码位置
 
 | 文件 | 内容 |
