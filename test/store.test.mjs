@@ -19,7 +19,10 @@ test('a missing state file starts a fresh install and writes defaults', async (t
   assert.equal(store.loadError, null)
   const raw = await readFile(join(home, 'ssh-remote', 'state.json'), 'utf8')
   const saved = JSON.parse(raw)
-  assert.equal(saved.version, 1)
+  assert.equal(saved.version, 2)
+  // '' follows the dsh build the desktop runs; the Host resolves it.
+  assert.equal(saved.settings.dshVersion, '')
+  assert.equal(saved.settings.nodeVersion, '')
   // Legacy ~/.dsh/dsh-ssh.json may be imported on a developer machine; only
   // the state shape is this test's concern.
   assert.ok(Array.isArray(saved.hosts))
@@ -45,7 +48,7 @@ test('a corrupt state file is backed up instead of overwritten', async (t) => {
 
   // A fresh, valid state replaced the unreadable one.
   const saved = JSON.parse(await readFile(statePath, 'utf8'))
-  assert.equal(saved.version, 1)
+  assert.equal(saved.version, 2)
   assert.ok(Array.isArray(saved.hosts))
 })
 
@@ -60,23 +63,44 @@ test('a non-object state file is treated as corrupt', async (t) => {
   assert.ok(store.recoveredFrom)
 })
 
-test('the legacy runtime default migrates to a build that can forward commands', async (t) => {
+test('the legacy runtime default migrates to "follow this computer"', async (t) => {
   const home = await makeHome(t)
   const root = join(home, 'ssh-remote')
   await mkdir(root, { recursive: true })
   const statePath = join(root, 'state.json')
   await writeFile(statePath, JSON.stringify({
     version: 1,
-    settings: { dshVersion: '0.2.1-rc.5' },
+    settings: { dshVersion: '0.2.1-rc.5', nodeVersion: '22.23.2' },
+    hosts: [],
+    workspaces: [{ id: 'ws-1', name: 'demo', remotePath: '/srv/demo' }]
+  }), 'utf8')
+
+  const store = new RemoteStore({ dshHome: home, secrets: false })
+  await store.load()
+  assert.equal(store.settings.dshVersion, '')
+  assert.equal(store.settings.nodeVersion, '')
+  // The project survives the migration with a not-yet-allocated view port.
+  assert.equal(store.workspaces.length, 1)
+  assert.equal(store.workspaces[0].viewPort, 0)
+  const saved = JSON.parse(await readFile(statePath, 'utf8'))
+  assert.equal(saved.version, 2)
+  assert.equal(saved.settings.dshVersion, '')
+})
+
+test('the shipped 0.2.2-rc.1 default also becomes "follow this computer"', async (t) => {
+  const home = await makeHome(t)
+  const root = join(home, 'ssh-remote')
+  await mkdir(root, { recursive: true })
+  await writeFile(join(root, 'state.json'), JSON.stringify({
+    version: 1,
+    settings: { dshVersion: '0.2.2-rc.1' },
     hosts: [],
     workspaces: []
   }), 'utf8')
 
   const store = new RemoteStore({ dshHome: home, secrets: false })
   await store.load()
-  assert.equal(store.settings.dshVersion, '0.2.2-rc.1')
-  const saved = JSON.parse(await readFile(statePath, 'utf8'))
-  assert.equal(saved.settings.dshVersion, '0.2.2-rc.1')
+  assert.equal(store.settings.dshVersion, '')
 })
 
 test('a deliberately pinned runtime version is not migrated', async (t) => {
