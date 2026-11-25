@@ -45,7 +45,7 @@ npm run e2e:bridge -- --host home130
 
 ```bash
 npm pack --dry-run --json   # 与 verify 相同，确认文件清单
-npm pack                    # 产物 dsh-ssh-remote-<version>.tgz
+npm pack                    # 产物 looooong-dsh-ssh-<version>.tgz
 ```
 
 在干净目录安装产物，启动一次 dsh，确认：

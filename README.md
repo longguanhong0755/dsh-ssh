@@ -1,6 +1,6 @@
-# dsh-ssh-remote
+# dsh-ssh
 
-[![npm](https://img.shields.io/npm/v/dsh-ssh-remote?style=flat-square&logo=npm&color=4D6BFE)](https://www.npmjs.com/package/dsh-ssh-remote)
+[![npm](https://img.shields.io/npm/v/@looooong/dsh-ssh?style=flat-square&logo=npm&color=4D6BFE)](https://www.npmjs.com/package/@looooong/dsh-ssh)
 [![CI](https://github.com/longguanhong0755/dsh-ssh/actions/workflows/ci.yml/badge.svg)](https://github.com/longguanhong0755/dsh-ssh/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-4D6BFE?style=flat-square)](LICENSE)
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
@@ -12,7 +12,7 @@
 在远程机器上跑一个常驻的 dsh，本机只负责选目录、聊天、看状态。关掉本机 dsh，远程的 agent 和正在生成的回答继续跑；想用浏览器打开那台机器上完整的 DSH，点一下就行。
 
 > 适用 DeepSeek Harness Desktop 0.2.x（本机 Node ≥ 22）。远端 dsh 版本跟随你本机已装的那一个，不需要单独挑版本。
-> 仓库是 `dsh-ssh`，npm 包名 `dsh-ssh-remote`。
+> 仓库是 `dsh-ssh`，npm 包名 `@looooong/dsh-ssh`（插件 ID 与包名一致）。
 
 ---
 
@@ -106,7 +106,7 @@ node bin/install.mjs --profile desktop
 **方式二：从 npm 安装**
 
 ```powershell
-npm i -g dsh-ssh-remote
+npm i -g @looooong/dsh-ssh
 dsh-ssh-install --profile desktop
 ```
 

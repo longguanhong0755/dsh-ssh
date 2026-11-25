@@ -5,7 +5,7 @@
 // then wait for the new fiber to report active. No app restart, and no bridge
 // attachments survive the swap, so reopen remote chats afterwards.
 //
-//   node scripts/reload.mjs [--base http://127.0.0.1:3082] [--id dsh-ssh-remote]
+//   node scripts/reload.mjs [--base http://127.0.0.1:3082] [--id @looooong/dsh-ssh]
 //
 // Exits non-zero when the plugin does not come back active. The plugin's own
 // `/api/ssh-remote/*` routes are served through the app renderer's fetch
@@ -18,7 +18,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   if (arg.startsWith('--')) args.set(arg.slice(2), process.argv[i + 1]?.startsWith('--') ? true : process.argv[++i])
 }
 const base = String(args.get('base') || process.env.DSH_BASE || 'http://127.0.0.1:3082').replace(/\/+$/u, '')
-const pluginId = String(args.get('id') || 'dsh-ssh-remote')
+const pluginId = String(args.get('id') || '@looooong/dsh-ssh')
 const entryId = pluginId.startsWith('include:') ? pluginId : `include:${pluginId}`
 
 async function rpc(method, payload) {

@@ -1,6 +1,6 @@
-# dsh-ssh-remote
+# dsh-ssh
 
-[![npm](https://img.shields.io/npm/v/dsh-ssh-remote?style=flat-square&logo=npm&color=4D6BFE)](https://www.npmjs.com/package/dsh-ssh-remote)
+[![npm](https://img.shields.io/npm/v/@looooong/dsh-ssh?style=flat-square&logo=npm&color=4D6BFE)](https://www.npmjs.com/package/@looooong/dsh-ssh)
 [![CI](https://github.com/longguanhong0755/dsh-ssh/actions/workflows/ci.yml/badge.svg)](https://github.com/longguanhong0755/dsh-ssh/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-4D6BFE?style=flat-square)](LICENSE)
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
@@ -12,7 +12,7 @@
 A persistent dsh runs on the remote machine; the local app only picks folders, chats and watches state. Close the local app and the remote agent keeps working, including the answer it is writing. Want the full DSH from that machine in a browser? One click.
 
 > For DeepSeek Harness Desktop 0.2.x (local Node ≥ 22). The remote dsh version follows the one you already run locally — there is no version to pick.
-> Repository `dsh-ssh`, npm package `dsh-ssh-remote`.
+> Repository `dsh-ssh`, npm package `@looooong/dsh-ssh` (the plugin id is the package name).
 
 ---
 
@@ -106,7 +106,7 @@ node bin/install.mjs --profile desktop
 **Option 2: from npm**
 
 ```bash
-npm i -g dsh-ssh-remote
+npm i -g @looooong/dsh-ssh
 dsh-ssh-install --profile desktop
 ```
 

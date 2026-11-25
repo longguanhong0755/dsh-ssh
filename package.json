@@ -1,5 +1,5 @@
 {
-  "name": "dsh-ssh-remote",
+  "name": "@looooong/dsh-ssh",
   "version": "0.4.0",
   "description": "Remote workspaces for DeepSeek Harness: deploy and supervise a persistent dsh runtime on an SSH host, WSL distribution or Docker container, project it into the native workspace list, chat from the local app, and open the remote DSH in your own browser.",
   "license": "MIT",
@@ -14,6 +14,9 @@
   },
   "type": "module",
   "main": "lib/index.js",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "dsh-ssh-install": "./bin/install.mjs",
     "dsh-ssh-uninstall": "./bin/uninstall.mjs"
