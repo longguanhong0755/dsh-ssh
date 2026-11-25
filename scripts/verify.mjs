@@ -1,12 +1,14 @@
 // `npm run verify`: the checks CI runs, in one command.
 //
-// Four gates, cheapest first:
+// Five gates, cheapest first:
 //   1. every shipped module parses (`scripts/check.mjs`);
 //   2. the unit/regression suite passes (`node --test`);
-//   3. `lib/client.js` is exactly what `scripts/build-client.mjs` produces —
+//   3. the error table in `docs/errors.md` matches the catalog;
+//   4. every style class the client builds has a rule in the injected sheet;
+//   5. `lib/client.js` is exactly what `scripts/build-client.mjs` produces —
 //      a stale bundle is restored and the run fails, so a part edit can never
 //      ship without its generated entry;
-//   4. the npm tarball contains no local state, analysis notes or client parts.
+//   6. the npm tarball contains no local state, analysis notes or client parts.
 //
 // Kept dependency-free and cross-platform: Windows cannot `execFile` npm.cmd
 // without a shell, so npm is invoked through a shell only there.
@@ -30,6 +32,7 @@ function run(label, command, args, options = {}) {
 run('check: parsing every shipped module', process.execPath, ['scripts/check.mjs'])
 run('test: unit and regression suite', process.execPath, ['--test'])
 run('docs: the error table matches lib/errors.js', process.execPath, ['scripts/errors-doc.mjs', '--check'])
+run('styles: every class the client builds has a rule', process.execPath, ['scripts/classes.mjs'])
 
 const bundle = path.join(root, 'lib', 'client.js')
 const before = readFileSync(bundle, 'utf8')

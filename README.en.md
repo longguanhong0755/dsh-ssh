@@ -150,6 +150,19 @@ The **SSH Remote** panel only manages devices; workspaces are created from the m
 - No local mirror of remote files — the agent and tools run inside the target;
 - WSL needs Windows with WSL installed; Docker containers need a published web port; Windows remote hosts are not supported.
 
+## Development
+
+```bash
+git clone https://github.com/<owner>/dsh-ssh-remote
+cd dsh-ssh-remote
+npm test          # unit and regression tests, plain node:test, no framework
+npm run verify    # what CI runs: parse, tests, error table, styles, bundle, tarball
+```
+
+The client is split into parts under `lib/client/`, concatenated in filename order into `lib/client.js` (a classic script, no bundler). After editing a part run `npm run build:client` before committing; `npm run verify` fails and restores the file when the bundle is stale. Each part starts with `// part: <name> -- <what it owns>`.
+
+Two conventions have gates so they cannot rot: a new error code needs `npm run docs:errors` to refresh `docs/errors.md`, and a new style class needs a real rule in `lib/client/30-styles.js` (`npm run styles` checks that the selector exists, not just the reference).
+
 ## License
 
 MIT

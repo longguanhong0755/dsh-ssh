@@ -150,6 +150,19 @@ node <插件目录>\bin\install.mjs --profile desktop
 - 本地不镜像远程文件，agent 与工具都在目标环境执行；
 - WSL 需要 Windows + 已安装 WSL；Docker 容器需要发布过 Web 端口；不支持 Windows 远程主机。
 
+## 参与开发
+
+```bash
+git clone https://github.com/<owner>/dsh-ssh-remote
+cd dsh-ssh-remote
+npm test          # 单元与回归测试，只用 node:test，没有测试框架依赖
+npm run verify    # CI 跑的全套：解析、测试、错误表、样式、客户端产物、打包清单
+```
+
+界面代码拆在 `lib/client/` 下的若干 part 文件里，按文件名顺序拼成 `lib/client.js`（classic script，不用打包器）。改了任一部分先 `npm run build:client` 再提交，`npm run verify` 会在产物过期时失败并还原文件。每个 part 的第一行固定为 `// part: <name> -- <这段负责什么>`。
+
+两个容易漏的约定，脚本会拦：新增的错误码要 `npm run docs:errors` 同步到 `docs/errors.md`；新增的样式类要真的写进 `lib/client/30-styles.js`（`npm run styles` 检查，防止只改了引用没改选择器）。
+
 ## License
 
 MIT

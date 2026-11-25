@@ -7,6 +7,7 @@
 - 工作树干净：`git status --short` 无输出；未提交的实验代码先移出分支。
 - `CHANGELOG.md` 的 `## Unreleased` 下已写清本次改动（工具 / 修复 / 安全），没有「待补」。
 - `docs/errors.md` 与 `lib/errors.js` 一致：`npm run docs:errors -- --check`（`npm run verify` 也会跑）。
+- 每个界面样式类都有对应规则：`npm run styles`（`verify` 也会跑）。
 - 版本号只在决定发版时改 `package.json`；`lib/client.js` 由 `npm run build:client` 生成，不要手改。
 
 ## 1. 自动门禁
@@ -16,7 +17,7 @@ npm ci
 npm run verify
 ```
 
-`verify` 依次完成：模块语法校验、全部单测、`lib/client.js` 重建后逐字节比对、`npm pack --dry-run` 内容审计（拒绝 `analysis/`、`state.json`、`known_hosts.json`、`lib/client/`）。CI（`.github/workflows/ci.yml`）在 Ubuntu Node 22/24 与 Windows Node 22 上跑同一条命令。
+`verify` 依次完成：模块语法校验、全部单测、`docs/errors.md` 与错误码表比对、样式类覆盖检查（`npm run styles`）、`lib/client.js` 重建后逐字节比对、`npm pack --dry-run` 内容审计（拒绝 `analysis/`、`state.json`、`known_hosts.json`、`lib/client/`）。CI（`.github/workflows/ci.yml`）在 Ubuntu Node 22/24 与 Windows Node 22 上跑同一条命令。
 
 ## 2. 真机验证
 
