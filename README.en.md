@@ -66,7 +66,7 @@ Remote workspaces show up in the native sidebar: status cloud (online / starting
 
 ![Remote workspace menu](docs/demo-workspace-menu.png)
 
-The `...` menu opens the remote DSH, starts a task, browses files, renames the project, pins it, deletes it. Deleting removes the local projection and the remote service only — **the remote project folder stays**.
+The `...` menu opens the remote DSH, starts a task, browses files, renames the project, pins it, hides it from the sidebar, deletes it. Deleting removes the local projection and the remote service only — **the remote project folder stays**, and a deletion stays: the projection only rebuilds projects that are still there. To tidy the sidebar without touching the remote service, use "Hide from sidebar"; "Show in sidebar" on the SSH Remote panel brings it back.
 
 ### Streaming conversation
 
