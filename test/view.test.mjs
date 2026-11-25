@@ -4,10 +4,10 @@ import { ViewService } from '../lib/view.js'
 
 const BANNER = 'dsh web: http://127.0.0.1:45123/?token=old-token'
 
-function harness({ log = '', status = { active: true, httpStatus: '200' } } = {}) {
+function harness({ log = '', status = { active: true, httpStatus: '200' }, hostExtra = {} } = {}) {
   const calls = { start: 0, restart: 0, patches: [], logs: 0 }
   let currentLog = log
-  const host = { id: 'h1', name: 'dev', host: '10.0.0.9', port: 22 }
+  const host = { id: 'h1', name: 'dev', host: '10.0.0.9', port: 22, ...hostExtra }
   const workspace = { id: 'w1', name: 'api', hostId: 'h1', port: 45123, viewPort: 0 }
   const manager = {
     async logs() { calls.logs += 1; return currentLog },
@@ -100,4 +100,20 @@ test('an unreachable target reports a coded failure and closes the mirror', asyn
   service.introspect = async () => ({ ok: false, status: 0 })
   await assert.rejects(service.open('w1'), (error) => error.code === 'view-target-offline')
   assert.equal(forwarder.entries.size, 0)
+})
+
+test('a WSL workspace opens its own loopback without a mirror', async () => {
+  const { service, forwarder } = harness({ log: BANNER, hostExtra: { kind: 'wsl', distro: 'Ubuntu' } })
+  service.introspect = async () => ({ ok: true, status: 200 })
+  const result = await service.open('w1')
+  // The workspace port, not a local mirror port, and no channel was created.
+  assert.equal(result.port, 45123)
+  assert.equal(result.url, 'http://127.0.0.1:45123/?token=old-token')
+  assert.equal(forwarder.entries.size, 0)
+})
+
+test('a Docker workspace explains that its port must be published', async () => {
+  const { service } = harness({ log: BANNER, hostExtra: { kind: 'docker', container: 'dsh' } })
+  await assert.rejects(service.open('w1'), (error) => error.code === 'view-unsupported'
+    && /发布/u.test(error.message))
 })
