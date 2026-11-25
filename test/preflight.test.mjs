@@ -87,3 +87,28 @@ test('a dead connection degrades instead of blocking the wizard', async () => {
   assert.equal(result.degraded, true)
   assert.equal(result.checks.length, 1)
 })
+
+test('every row carries both languages and a fix for anything not ok', async () => {
+  const result = await runPreflight(managerFor(markers({
+    OS: 'Darwin',
+    NODEV: 'v18.20.4',
+    INIT: 'init',
+    SYSTEMD: '',
+    CRON: ''
+  }), { registryCode: '503' }), { assetInstallMode: 'remote-download' }, { settings: SETTINGS })
+  assert.ok(result.checks.length >= 8)
+  for (const row of result.checks) {
+    assert.ok(row.id, 'row without an id')
+    assert.ok(row.title && row.titleEn, `${row.id} has no title pair`)
+    assert.equal(typeof row.detailEn, 'string')
+    assert.equal(typeof row.hintEn, 'string')
+    if (row.state === 'error' || row.state === 'warn') {
+      assert.ok(row.hint, `${row.id} has no hint`)
+      assert.ok(row.hintEn, `${row.id} has no English hint`)
+    }
+  }
+  // The English copy is a translation, not a copy of the Chinese sentence.
+  const node = result.checks.find((row) => row.id === 'node')
+  assert.notEqual(node.titleEn, node.title)
+  assert.notEqual(node.hintEn, node.hint)
+})
