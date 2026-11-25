@@ -1,7 +1,7 @@
 {
   "name": "dsh-ssh-remote",
-  "version": "0.3.1",
-  "description": "ZCode-style SSH remote workspaces for DeepSeek Harness: deploy and supervise a persistent dsh runtime on an SSH host, project it into the native workspace list, and reopen recent remote directories in one click.",
+  "version": "0.4.0",
+  "description": "Remote workspaces for DeepSeek Harness: deploy and supervise a persistent dsh runtime on an SSH host, WSL distribution or Docker container, project it into the native workspace list, chat from the local app, and open the remote DSH in your own browser.",
   "license": "MIT",
   "author": "longguanhong0755",
   "repository": {
@@ -48,6 +48,7 @@
     "bin",
     "scripts",
     "docs/*.png",
+    "docs/errors.md",
     "cordis.patch.yml",
     "CHANGELOG.md",
     "README.md",

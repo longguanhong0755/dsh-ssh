@@ -29,6 +29,7 @@ function run(label, command, args, options = {}) {
 
 run('check: parsing every shipped module', process.execPath, ['scripts/check.mjs'])
 run('test: unit and regression suite', process.execPath, ['--test'])
+run('docs: the error table matches lib/errors.js', process.execPath, ['scripts/errors-doc.mjs', '--check'])
 
 const bundle = path.join(root, 'lib', 'client.js')
 const before = readFileSync(bundle, 'utf8')

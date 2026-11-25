@@ -6,7 +6,7 @@
 
 - 工作树干净：`git status --short` 无输出；未提交的实验代码先移出分支。
 - `CHANGELOG.md` 的 `## Unreleased` 下已写清本次改动（工具 / 修复 / 安全），没有「待补」。
-- `docs/zcode-ssh-parity.md` 的状态列与代码一致：只有跑过真机或截图比对的才能写「实机验证」。
+- `docs/errors.md` 与 `lib/errors.js` 一致：`npm run docs:errors -- --check`（`npm run verify` 也会跑）。
 - 版本号只在决定发版时改 `package.json`；`lib/client.js` 由 `npm run build:client` 生成，不要手改。
 
 ## 1. 自动门禁

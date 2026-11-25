@@ -1,12 +1,43 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-11-25
 
-### 安全
+### 上手
+
+- 空设备列表换成三步引导卡：填地址 → 选远端目录 → 点项目打开远程 DSH，并说明插件会在远端装什么、WSL 与 Docker 也能用。点「不再提示」写入 `settings.onboarded`，不再反复出现。
+- 新建连接改为先测试再保存：主机解析、端口、账号和登录方式在保存前给出结论与下一步；首次连接显示主机指纹，确认后记住，指纹变化拒绝连接。
+- 每个失败响应都带 `code` / `error` / `hint` / `retryable`，向导与诊断页在红字下面直接给出下一步；`docs/errors.md` 由 `lib/errors.js` 生成，`npm run docs:errors` 更新，测试与 `npm run verify` 会拦住忘记重新生成的情况。
+- 启动时自动重连不再静默失败：收集失败的设备，用一条横幅说明「远端任务仍在运行，只是本机没接上」，可一键重试或忽略。
+
+### 打开远程 DSH
+
+- 新增「打开远程 DSH」：通过已有 SSH 连接开一条 `direct-tcpip` 通道（`SSHPool.forwardOut`），把远端 Web 端口映射到本机固定端口（每个工作区一个，重开不变），从当前进程日志取最新令牌地址，先用请求探一次令牌是否被接受，过期就重启一次远端服务换新令牌，再用系统浏览器打开。
+- 固定端口是有意的：dsh 用 `?token=` 换 30 天 cookie，cookie 绑定 `127.0.0.1:<端口>`，端口一变就要重新登录。
+- 通道断开时返回一段 502 说明页而不是静默复位；WSL 目标直接开自己的 `127.0.0.1`；Docker 目标提示需要发布端口（`view-docker-port-unpublished`）。
+- 入口有三处：项目行上的 ↗、侧栏行行动作、设备页项目行；打开过程是后台 job，界面只用一条小提示显示进度，不阻塞。
+
+### 诊断
+
+- 新增 `GET /ssh-remote/diagnostics` 与「运行诊断」：只读地跑一遍向导同款环境检查，列出运行时版本、服务状态、本机入口端口、主机指纹与最近 40 行日志，可复制成报告、可重跑，也能直接跳到打开远程 DSH。
+- `TargetPool` 补齐 `hostKeyFor` / `forgetHostKey` / `forwardOut`，路由与诊断看到同一套门面；本机（WSL/Docker）目标不再假装有指纹或通道。
+
+### 状态与行操作
+
+- 侧栏图标、侧栏文字与行菜单改用同一个状态模型（`workspaceStatusView`），同一时刻不会一处显示离线、另一处显示在线。
+- 需要更新的设备在行内直接给「更新到 x.y.z」，走既有的重装流程（保留项目、任务与设置），不再只藏在菜单里。
+
+### 发布
+
+- 版本 0.4.0；README 中英文重写，新增「打开远程 DSH」「诊断与错误码」两节，移除 ZCode 相关表述与两张逆向笔记（移到仓库外的 `analysis/`，npm 包与仓库都不再包含）。
+- `npm run verify` 增加错误表校验；GitHub Actions 继续跑 Ubuntu（Node 22/24）与 Windows。
+
+### 自 0.3.1 起的其它改动
+
+#### 安全
 
 - SSH 密码与私钥口令不再落盘：`lib/secrets.js` 在 Windows 用凭据管理器（PowerShell 内联 `CredWrite`/`CredRead`，密钥走 stdin）、macOS 用钥匙串（`security -i`，载荷不进 argv，写完读回校验）、Linux 用 libsecret（`secret-tool`，密钥走 stdin）。`RemoteStore` 首次加载把 `state.json` 里的明文迁进系统凭据库，文件只保留 `auth.secretBackend` 标记；进程内仍保留明文供 SSH 连接使用，`save()` 统一脱敏。系统没有凭据库或写入失败时保留原来的 0600 文件行为并记日志，不丢密码；凭据库读不到密码时连接直接提示「请重新输入密码」，而不是泛化的认证失败。`remoteStore({ secretWrites: false })` 供 e2e 只读克隆，不会改动用户的凭据库。`/ssh-remote/health` 新增 `secrets` 检查，报告后端与仍留在文件里的设备数；`publicHost.auth` 增加 `secretStorage`。Windows 本机已实测写入/读取/删除往返（含中文与空格密码），macOS/Linux 命令行协议由单测覆盖。
 
-### 工具
+#### 工具
 
 - 状态轮询改为按主机批量：`statusMany` 用一台设备一次 exec 跑完该设备所有工作区（`@@WSS:<n>@@`/`@@SVC:<n>@@` 分段），不再按项目数开 SSH 通道；主机级失败只把该设备的工作区标成 `unreachable`，不影响其它设备。成功后 `markHostConnected`，失败 `markHostUnreachable`，只在状态变化时落盘。设备页与侧栏行装饰改用单请求 `GET /ssh-remote/overview`（hosts + workspaces + settings），设备行悬停预热 `POST /ssh-remote/hosts/warm`（按主机 60 秒节流）。`scripts/e2e-live.mjs` 增加 `health` 与 `status batch` 两步，home130/home132 实测 22/22 通过。
 - `/ssh-remote/health` 从「只报版本号」改成真正的本地自检：store、anchor/registry、bridge 会话与 journal、SSH 连接、凭据存储；`?deep=1` 时按工作区探测远端运行态（带超时），不写任何状态。9 个单测覆盖健康/缺失/残留/SDK 失败/深探测/超时/跳过主机/连接计数。
@@ -15,7 +46,7 @@
 - 新增 `npm run verify` 与 GitHub Actions：一条命令依次跑模块语法校验、185 个测试、`lib/client.js` 重新构建后逐字节比对（发现过期会还原并失败）、`npm pack --dry-run` 内容审计（拒绝 `analysis/`、`state.json`、`known_hosts.json`、`lib/client/` 等本机文件进入包）。CI 在 Ubuntu（Node 22/24）与 Windows（Node 22）各跑一遍。
 - 新增 `npm run scan`（`scripts/session-scan.mjs`）：只读扫描 `DSH_HOME/sessions` 下的 `session.v4.jsonl.zstd`，逐份报告帧布局、解压、JSON 行完整性与最后一个事件类型；有问题的会话以退出码 1 结束，便于在「会话从侧栏消失」时先定位日志，而不是靠猜。
 
-### 修复
+#### 修复
 
 - 修复桥接会话在 SSH 掉线后永久卡在「运行中」、远端其实早已答完：tail 断开后走 polling 兜底，而兜底把每一行直接交给 `consumeEvent`；SDK 运行时写的是 JSON-RPC `session.event`，只有 `consumeFrame` 会解包。于是流式预览照常显示，但 assistant 消息、`step/end`、`turn/end` 全被丢弃，回合没有终点也不报错。现在 polling 与 tail 走同一个分发器，并补上 tail 早就有的「远端日志被重建」保护（文件小于偏移就从头读，而不是等一个永远长不到偏移的文件）；新增 2 个回归测试，130/132 实测掉线后 1.7–1.8 秒正常收尾。
 - 修复同时创建两个项目时抢到同一个端口、其中一个以 `state=error` 结束且没有监听进程：`create()` 现在按主机串行（`RemoteManager.withHostLock`），运行时安装仍由 `ensureRuntime` 去重；新增 3 个并发回归测试，实测 130 并行创建拿到 39081/39082。

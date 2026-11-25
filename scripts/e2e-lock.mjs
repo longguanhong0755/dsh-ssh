@@ -1,8 +1,8 @@
 // Live check for the remote install lock against real SSH hosts.
 //
 // Two desktops pointing at the same host share `~/.dsh-remote/runtime`, so an
-// install must be serialized remotely, and the loser must receive ZCode's
-// `source-server-update-in-progress` semantics instead of corrupting the tree.
+// install must be serialized remotely, and the loser must receive a clear
+// `source-server-update-in-progress` answer instead of corrupting the tree.
 // This harness proves the shell protocol (`mkdir` -> holder -> `rm -rf`) on the
 // host itself, using a throwaway runtime root so the deployed runtime is never
 // touched:

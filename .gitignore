@@ -7,13 +7,12 @@ state.json*
 known_hosts.json
 bridge.json*
 
-# Local secrets and proprietary analysis notes
+# Local secrets and machine-specific notes
 .env
 .env.*
 *.pem
 *.key
 analysis/
-.zcode/
 coverage/
 
 .DS_Store
