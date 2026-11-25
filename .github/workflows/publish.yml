@@ -1,0 +1,52 @@
+name: Publish
+
+# npm Trusted Publishing: the registry trusts this workflow itself through an
+# OIDC token, so a release needs no stored npm token and no one-time password.
+# The connection is registered once in the package settings
+# (Publisher: GitHub Actions, user longguanhong0755, repo dsh-ssh,
+# workflow publish.yml). Re-running the job from the Actions UI republishes the
+# same tag, which is what a failed release needs.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs a CLI that speaks OIDC (npm >= 11.5.1), and the
+      # npm bundled with the runner image can lag behind.
+      - run: npm install --global npm@latest
+      - run: npm ci
+      # Same gate the local release uses: tests, error table, styles, client
+      # bundle and package contents.
+      - run: npm run verify
+      # A tag that disagrees with the manifest would publish a version nobody
+      # tagged, and npm has no unpublish for a release others may have pulled.
+      - name: tag matches package.json
+        run: |
+          node -e '
+            const pkg = require("./package.json");
+            const tag = (process.env.GITHUB_REF_NAME || "").replace(/^v/u, "");
+            if (tag !== pkg.version) {
+              throw new Error(`tag ${tag} does not match package.json ${pkg.version}`);
+            }
+            console.log(`publishing ${pkg.name}@${pkg.version}`);
+          '
+      - run: npm publish --access public
