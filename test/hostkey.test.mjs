@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { SSHPool } from '../lib/ssh.js'
+import { TargetPool } from '../lib/targets.js'
 
 function poolWith(knownHosts) {
   const saved = []
@@ -39,4 +40,15 @@ test('forgetting one key leaves every other host alone and persists', async () =
   // A second forget is a no-op and does not rewrite the file.
   assert.equal(await pool.forgetHostKey({ id: 'host-a', host: 'a.example', port: 22 }), false)
   assert.equal(saved.length, 1)
+})
+
+test('the target facade reports keys for SSH and nothing for local backends', async () => {
+  const { pool } = poolWith({ 'a.example:22': { fingerprint: 'SHA256:a' } })
+  const targets = new TargetPool({ sshPool: pool })
+  assert.equal(targets.hostKeyFor({ host: 'a.example', port: 22 }).fingerprint, 'SHA256:a')
+  assert.equal(targets.hostKeyFor({ host: 'wsl', kind: 'wsl', distro: 'Ubuntu' }), null)
+  assert.equal(await targets.forgetHostKey({ host: 'wsl', kind: 'wsl', distro: 'Ubuntu' }), false)
+  // A local target never opens an SSH channel.
+  await assert.rejects(targets.forwardOut({ host: 'wsl', kind: 'wsl', distro: 'Ubuntu' }, 39080),
+    (error) => error.code === 'view-unsupported')
 })

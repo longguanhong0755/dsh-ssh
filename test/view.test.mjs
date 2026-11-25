@@ -114,6 +114,6 @@ test('a WSL workspace opens its own loopback without a mirror', async () => {
 
 test('a Docker workspace explains that its port must be published', async () => {
   const { service } = harness({ log: BANNER, hostExtra: { kind: 'docker', container: 'dsh' } })
-  await assert.rejects(service.open('w1'), (error) => error.code === 'view-unsupported'
+  await assert.rejects(service.open('w1'), (error) => error.code === 'view-docker-port-unpublished'
     && /发布/u.test(error.message))
 })

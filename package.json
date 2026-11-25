@@ -25,6 +25,7 @@
     "doctor": "node scripts/anchor-doctor.mjs",
     "repack": "node scripts/anchor-repack.mjs",
     "build:client": "node scripts/build-client.mjs",
+    "docs:errors": "node scripts/errors-doc.mjs",
     "test": "node --test",
     "e2e:live": "node scripts/e2e-live.mjs",
     "e2e:lock": "node scripts/e2e-lock.mjs",
