@@ -176,6 +176,12 @@ Versions are managed for you: when the remote lags, its row shows an update, and
 **Why does the first project take a minute or two?**
 The first deploy uploads the dsh package, prepares the runtime, registers the service and starts the process. The progress bar shows the percentage and a remaining time derived from the observed rate; after that it is just a process start.
 
+**npm said the `ssh2` install script was blocked?**
+That script builds ssh2's optional native accelerator. Skipping it still connects, over the pure-JS path. Allow the script and reinstall if you want the faster one; doing nothing is fine too.
+
+**What about the `dsh-ssh-remote` name?**
+That package on npm belongs to someone else. This project publishes as `@looooong/dsh-ssh`, and the plugin id is the package name; `bin/install.mjs` clears the old id from a profile it upgrades.
+
 ---
 
 ## Data and security
